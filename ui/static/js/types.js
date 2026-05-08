@@ -96,11 +96,13 @@
  * @typedef {Object} Education
  * @property {string} institution - Institution name
  * @property {string} degree - Degree obtained
- * @property {string} [field] - Field of study
+ * @property {string} [field] - Field of study (resume parser / legacy)
+ * @property {string} [field_of_study] - Field of study (profile API)
  * @property {string} [location] - Institution location
- * @property {string} [start_date] - Start date
- * @property {string} [end_date] - End date
- * @property {boolean} [current] - Currently studying here
+ * @property {string} [start_date] - Start date (YYYY-MM)
+ * @property {string} [end_date] - End date (YYYY-MM)
+ * @property {boolean} [is_current] - Currently enrolled
+ * @property {boolean} [current] - Legacy: currently studying
  * @property {number} [gpa] - Grade point average
  */
 

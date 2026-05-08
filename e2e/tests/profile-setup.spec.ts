@@ -3,22 +3,28 @@ import { test, expect } from '@playwright/test';
 /**
  * COMPREHENSIVE PROFILE SETUP PAGE TESTS  (/profile/setup)
  *
- * The profile setup is a 5-step wizard (step-0 through step-4):
+ * Wizard: step-0 (resume) + step-1 … step-5 (five content steps after resume).
  *   Step 0: Resume upload  (optional — can skip)
  *   Step 1: Basic Info     (city, state, country, title, experience, summary, student toggle)
  *   Step 2: Experience     (job entries + "no experience" checkbox)
- *   Step 3: Skills         (tag input)
- *   Step 4: Preferences    (salary, job types, company sizes, work arrangement, travel, relocation, visa, clearance)
+ *   Step 3: Education        (entries + "no formal education" checkbox)
+ *   Step 4: Skills         (tag input)
+ *   Step 5: Preferences    (salary, job types, company sizes, work arrangement, travel, relocation, visa, clearance)
  *
  * Sections:
  *   A. Page structure (navbar, progress bar, step indicators, alerts)
  *   B. Step 0 — Resume Upload
  *   C. Step 1 — Basic Info
  *   D. Step 2 — Experience
- *   E. Step 3 — Skills
- *   F. Step 4 — Preferences
- *   G. Navigation buttons (Prev / Next / Complete)
- *   H. Access control
+ *   E. Step 3 — Education
+ *   F. Step 4 — Skills
+ *   G. Step 5 — Preferences
+ *   H. Navigation buttons (Prev / Next / Complete)
+ *   I. Access control
+ *   J. Page structure extended
+ *   K. Step 1 validation & mobile
+ *   L. Step 4 skills extended
+ *   M. Completion flow
  */
 
 // Must be a valid 3-part JWT format — profile-setup.js validates token.split('.').length === 3
@@ -69,13 +75,16 @@ async function setupAuth(page: any) {
   await page.route('**/api/v1/profile/basic-info', (route: any) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'Saved' }),
   }));
-  await page.route('**/api/v1/profile/experience', (route: any) => route.fulfill({
+  await page.route('**/api/v1/profile/work-experience', (route: any) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'Saved' }),
   }));
-  await page.route('**/api/v1/profile/skills', (route: any) => route.fulfill({
+  await page.route('**/api/v1/profile/education', (route: any) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'Saved' }),
   }));
-  await page.route('**/api/v1/profile/preferences', (route: any) => route.fulfill({
+  await page.route('**/api/v1/profile/skills-qualifications', (route: any) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'Saved' }),
+  }));
+  await page.route('**/api/v1/profile/career-preferences', (route: any) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'Saved' }),
   }));
   await page.route('**/api/v1/profile/complete', (route: any) => route.fulfill({
@@ -109,14 +118,15 @@ test.describe('A. Page Structure', () => {
     await expect(page.locator('#progress-bar')).toBeAttached();
   });
 
-  test('4 step indicators are present (steps 1–4)', async ({ page }) => {
-    await expect(page.locator('[data-step]')).toHaveCount(4);
+  test('5 step indicators are present (steps 1–5)', async ({ page }) => {
+    await expect(page.locator('[data-step]')).toHaveCount(5);
   });
 
   test('step indicator labels are correct', async ({ page }) => {
     const labels = await page.locator('.step-label').allTextContents();
     expect(labels).toContain('Basic Info');
     expect(labels).toContain('Experience');
+    expect(labels).toContain('Education');
     expect(labels).toContain('Skills');
     expect(labels).toContain('Preferences');
   });
@@ -133,11 +143,12 @@ test.describe('A. Page Structure', () => {
     await expect(page.locator('#step-0')).toBeVisible();
   });
 
-  test('steps 1-4 are hidden on page load', async ({ page }) => {
+  test('steps 1-5 are hidden on page load', async ({ page }) => {
     await expect(page.locator('#step-1')).not.toBeVisible();
     await expect(page.locator('#step-2')).not.toBeVisible();
     await expect(page.locator('#step-3')).not.toBeVisible();
     await expect(page.locator('#step-4')).not.toBeVisible();
+    await expect(page.locator('#step-5')).not.toBeVisible();
   });
 });
 
@@ -205,8 +216,16 @@ async function fillStep2Required(page: any) {
   }
 }
 
+/** Check "no formal education" so education step passes */
+async function fillStep3Education(page: any) {
+  const cb = page.locator('#no-education');
+  if (await cb.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await cb.check();
+  }
+}
+
 /** Add one skill tag so skills step passes */
-async function fillStep3Required(page: any) {
+async function fillStep4Skills(page: any) {
   const input = page.locator('#skills-input');
   if (await input.isVisible({ timeout: 2000 }).catch(() => false)) {
     await input.fill('JavaScript');
@@ -216,7 +235,7 @@ async function fillStep3Required(page: any) {
 }
 
 /** Check one of each required preference group */
-async function fillStep4Required(page: any) {
+async function fillStep5Preferences(page: any) {
   for (const id of ['#job-type-fulltime', '#company-size-small', '#work-arrangement-remote', '#travel-none']) {
     const el = page.locator(id);
     if (await el.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -353,10 +372,10 @@ test.describe('D. Step 2 — Experience', () => {
 });
 
 // ---------------------------------------------------------------------------
-// E. STEP 3 — SKILLS
+// E. STEP 3 — EDUCATION
 // ---------------------------------------------------------------------------
-test.describe('E. Step 3 — Skills', () => {
-  async function goToStep3(page: any) {
+test.describe('E. Step 3 — Education', () => {
+  async function goToStep3Education(page: any) {
     await setupAuth(page);
     await page.goto('/profile/setup');
     await page.waitForLoadState('domcontentloaded');
@@ -368,20 +387,59 @@ test.describe('E. Step 3 — Skills', () => {
     await fillStep2Required(page);
     await page.locator('#next-btn').click();
     await page.waitForTimeout(400);
+    await page.locator('#step-3').waitFor({ state: 'visible', timeout: 5000 });
+  }
+
+  test('education container is present', async ({ page }) => {
+    await goToStep3Education(page);
+    await expect(page.locator('#education-container')).toBeAttached();
+  });
+
+  test('"Add education" control is present', async ({ page }) => {
+    await goToStep3Education(page);
+    await expect(page.locator('#add-education-btn')).toBeAttached();
+  });
+
+  test('"No formal education" checkbox is present', async ({ page }) => {
+    await goToStep3Education(page);
+    await expect(page.locator('#no-education')).toBeAttached();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F. STEP 4 — SKILLS
+// ---------------------------------------------------------------------------
+test.describe('F. Step 4 — Skills', () => {
+  async function goToStep4Skills(page: any) {
+    await setupAuth(page);
+    await page.goto('/profile/setup');
+    await page.waitForLoadState('domcontentloaded');
+    await page.locator('#skip-resume-btn').click();
+    await page.waitForTimeout(300);
+    await fillStep1Required(page);
+    await page.locator('#next-btn').click();
+    await page.waitForTimeout(400);
+    await fillStep2Required(page);
+    await page.locator('#next-btn').click();
+    await page.waitForTimeout(400);
+    await fillStep3Education(page);
+    await page.locator('#next-btn').click();
+    await page.waitForTimeout(400);
+    await page.locator('#step-4').waitFor({ state: 'visible', timeout: 5000 });
   }
 
   test('skills input is present', async ({ page }) => {
-    await goToStep3(page);
+    await goToStep4Skills(page);
     await expect(page.locator('#skills-input')).toBeAttached();
   });
 
   test('skills container is present', async ({ page }) => {
-    await goToStep3(page);
+    await goToStep4Skills(page);
     await expect(page.locator('#skills-container')).toBeAttached();
   });
 
   test('can type into skills input', async ({ page }) => {
-    await goToStep3(page);
+    await goToStep4Skills(page);
     const input = page.locator('#skills-input');
     if (await input.isVisible()) {
       await input.fill('Python');
@@ -393,10 +451,10 @@ test.describe('E. Step 3 — Skills', () => {
 });
 
 // ---------------------------------------------------------------------------
-// F. STEP 4 — PREFERENCES
+// G. STEP 5 — PREFERENCES
 // ---------------------------------------------------------------------------
-test.describe('F. Step 4 — Preferences', () => {
-  async function goToStep4(page: any) {
+test.describe('G. Step 5 — Preferences', () => {
+  async function goToStep5Preferences(page: any) {
     await setupAuth(page);
     await page.goto('/profile/setup');
     await page.waitForLoadState('domcontentloaded');
@@ -408,49 +466,53 @@ test.describe('F. Step 4 — Preferences', () => {
     await fillStep2Required(page);
     await page.locator('#next-btn').click();
     await page.waitForTimeout(400);
-    await fillStep3Required(page);
+    await fillStep3Education(page);
+    await page.locator('#next-btn').click();
+    await page.waitForTimeout(400);
+    await fillStep4Skills(page);
     await page.locator('#next-btn').click();
     await page.waitForTimeout(500);
+    await page.locator('#step-5').waitFor({ state: 'visible', timeout: 5000 });
   }
 
   test('career preferences form is present', async ({ page }) => {
-    await goToStep4(page);
+    await goToStep5Preferences(page);
     await expect(page.locator('#career-preferences-form')).toBeAttached();
   });
 
   test('min salary input is present', async ({ page }) => {
-    await goToStep4(page);
+    await goToStep5Preferences(page);
     await expect(page.locator('#min-salary')).toBeAttached();
   });
 
   test('max salary input is present', async ({ page }) => {
-    await goToStep4(page);
+    await goToStep5Preferences(page);
     await expect(page.locator('#max-salary')).toBeAttached();
   });
 
   test.describe('Job type checkboxes', () => {
     test('full-time checkbox is present', async ({ page }) => {
-      await goToStep4(page);
+      await goToStep5Preferences(page);
       await expect(page.locator('#job-type-fulltime')).toBeAttached();
     });
     test('part-time checkbox is present', async ({ page }) => {
-      await goToStep4(page);
+      await goToStep5Preferences(page);
       await expect(page.locator('#job-type-parttime')).toBeAttached();
     });
     test('contract checkbox is present', async ({ page }) => {
-      await goToStep4(page);
+      await goToStep5Preferences(page);
       await expect(page.locator('#job-type-contract')).toBeAttached();
     });
     test('freelance checkbox is present', async ({ page }) => {
-      await goToStep4(page);
+      await goToStep5Preferences(page);
       await expect(page.locator('#job-type-freelance')).toBeAttached();
     });
     test('internship checkbox is present', async ({ page }) => {
-      await goToStep4(page);
+      await goToStep5Preferences(page);
       await expect(page.locator('#job-type-internship')).toBeAttached();
     });
     test('can check full-time', async ({ page }) => {
-      await goToStep4(page);
+      await goToStep5Preferences(page);
       const cb = page.locator('#job-type-fulltime');
       if (await cb.isVisible()) { await cb.check(); await expect(cb).toBeChecked(); }
       else { await expect(cb).toBeAttached(); }
@@ -461,7 +523,7 @@ test.describe('F. Step 4 — Preferences', () => {
     const sizes = ['startup', 'small', 'medium', 'large', 'enterprise'];
     for (const s of sizes) {
       test(`company-size-${s} is present`, async ({ page }) => {
-        await goToStep4(page);
+        await goToStep5Preferences(page);
         await expect(page.locator(`#company-size-${s}`)).toBeAttached();
       });
     }
@@ -471,12 +533,12 @@ test.describe('F. Step 4 — Preferences', () => {
     const arrangements = ['onsite', 'remote', 'hybrid'];
     for (const a of arrangements) {
       test(`work-arrangement-${a} is present`, async ({ page }) => {
-        await goToStep4(page);
+        await goToStep5Preferences(page);
         await expect(page.locator(`#work-arrangement-${a}`)).toBeAttached();
       });
     }
     test('can check remote', async ({ page }) => {
-      await goToStep4(page);
+      await goToStep5Preferences(page);
       const cb = page.locator('#work-arrangement-remote');
       if (await cb.isVisible()) { await cb.check(); await expect(cb).toBeChecked(); }
       else { await expect(cb).toBeAttached(); }
@@ -487,32 +549,32 @@ test.describe('F. Step 4 — Preferences', () => {
     const travels = ['none', 'minimal', 'moderate', 'frequent', 'extensive'];
     for (const t of travels) {
       test(`travel-${t} radio is present`, async ({ page }) => {
-        await goToStep4(page);
+        await goToStep5Preferences(page);
         await expect(page.locator(`#travel-${t}`)).toBeAttached();
       });
     }
   });
 
   test('willing-to-relocate checkbox is present', async ({ page }) => {
-    await goToStep4(page);
+    await goToStep5Preferences(page);
     await expect(page.locator('#willing-to-relocate')).toBeAttached();
   });
 
   test('requires-visa-sponsorship checkbox is present', async ({ page }) => {
-    await goToStep4(page);
+    await goToStep5Preferences(page);
     await expect(page.locator('#requires-visa-sponsorship')).toBeAttached();
   });
 
   test('has-security-clearance checkbox is present', async ({ page }) => {
-    await goToStep4(page);
+    await goToStep5Preferences(page);
     await expect(page.locator('#has-security-clearance')).toBeAttached();
   });
 });
 
 // ---------------------------------------------------------------------------
-// G. NAVIGATION BUTTONS
+// H. NAVIGATION BUTTONS
 // ---------------------------------------------------------------------------
-test.describe('G. Navigation Buttons', () => {
+test.describe('H. Navigation Buttons', () => {
   test.beforeEach(async ({ page }) => {
     await setupAuth(page);
     await page.goto('/profile/setup');
@@ -563,7 +625,7 @@ test.describe('G. Navigation Buttons', () => {
     }
   });
 
-  test('full forward walk: step 0 → 1 → 2 → 3 → 4', async ({ page }) => {
+  test('full forward walk: step 0 → 1 → 2 → 3 → 4 → 5', async ({ page }) => {
     await page.locator('#skip-resume-btn').click();
     await page.waitForTimeout(300);
     await fillStep1Required(page);
@@ -572,17 +634,20 @@ test.describe('G. Navigation Buttons', () => {
     await fillStep2Required(page);
     await page.locator('#next-btn').click();
     await page.waitForTimeout(400);
-    await fillStep3Required(page);
+    await fillStep3Education(page);
+    await page.locator('#next-btn').click();
+    await page.waitForTimeout(400);
+    await fillStep4Skills(page);
     await page.locator('#next-btn').click();
     await page.waitForTimeout(500);
-    await expect(page.locator('#step-4')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#step-5')).toBeVisible({ timeout: 5000 });
   });
 });
 
 // ---------------------------------------------------------------------------
-// H. ACCESS CONTROL
+// I. ACCESS CONTROL
 // ---------------------------------------------------------------------------
-test.describe('H. Access Control', () => {
+test.describe('I. Access Control', () => {
   test('unauthenticated user is redirected from /profile/setup', async ({ page }) => {
     await page.goto('/profile/setup');
     await page.waitForURL(/auth\/login/, { timeout: 8000 });
@@ -591,17 +656,17 @@ test.describe('H. Access Control', () => {
 });
 
 // ---------------------------------------------------------------------------
-// I. PAGE STRUCTURE EXTENDED
+// J. PAGE STRUCTURE EXTENDED
 // ---------------------------------------------------------------------------
-test.describe('I. Page Structure Extended', () => {
+test.describe('J. Page Structure Extended', () => {
   test.beforeEach(async ({ page }) => {
     await setupAuth(page);
     await page.goto('/profile/setup');
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('step containers step-0 through step-4 all exist in DOM', async ({ page }) => {
-    for (const step of ['step-0', 'step-1', 'step-2', 'step-3', 'step-4']) {
+  test('step containers step-0 through step-5 all exist in DOM', async ({ page }) => {
+    for (const step of ['step-0', 'step-1', 'step-2', 'step-3', 'step-4', 'step-5']) {
       await expect(page.locator(`#${step}`)).toBeAttached();
     }
   });
@@ -627,9 +692,9 @@ test.describe('I. Page Structure Extended', () => {
 });
 
 // ---------------------------------------------------------------------------
-// J. STEP 1 VALIDATION & MOBILE
+// K. STEP 1 VALIDATION & MOBILE
 // ---------------------------------------------------------------------------
-test.describe('J. Step 1 — Validation & Mobile', () => {
+test.describe('K. Step 1 — Validation & Mobile', () => {
   async function goToStep1(page: any) {
     await setupAuth(page);
     await page.goto('/profile/setup');
@@ -653,12 +718,13 @@ test.describe('J. Step 1 — Validation & Mobile', () => {
     expect(await cityInput.inputValue()).toBe('Tel Aviv');
   });
 
-  test('step 1 years-experience select has options', async ({ page }) => {
+  test('step 1 years-experience is a number input', async ({ page }) => {
     await goToStep1(page);
-    const select = page.locator('#years-experience');
-    await expect(select).toBeVisible();
-    const optionCount = await select.locator('option').count();
-    expect(optionCount).toBeGreaterThanOrEqual(1);
+    const input = page.locator('#years-experience');
+    await expect(input).toBeVisible();
+    expect(await input.getAttribute('type')).toBe('number');
+    const max = await input.getAttribute('max');
+    expect(max === '50' || max === null).toBe(true);
   });
 
   test('profile setup is visible on 375px mobile viewport', async ({ browser }) => {
@@ -678,10 +744,10 @@ test.describe('J. Step 1 — Validation & Mobile', () => {
 });
 
 // ---------------------------------------------------------------------------
-// K. STEP 3 SKILLS — EXTENDED
+// L. STEP 4 SKILLS — EXTENDED
 // ---------------------------------------------------------------------------
-test.describe('K. Step 3 — Skills Extended', () => {
-  async function goToStep3(page: any) {
+test.describe('L. Step 4 — Skills Extended', () => {
+  async function goToStep4SkillsExtended(page: any) {
     await setupAuth(page);
     await page.goto('/profile/setup');
     await page.waitForLoadState('domcontentloaded');
@@ -701,40 +767,43 @@ test.describe('K. Step 3 — Skills Extended', () => {
     }
     await page.locator('#next-btn').click();
     await page.waitForTimeout(400);
-    await page.locator('#step-3').waitFor({ state: 'visible', timeout: 5000 });
+    const noEd = page.locator('#no-education');
+    if (await noEd.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await noEd.check();
+    }
+    await page.locator('#next-btn').click();
+    await page.waitForTimeout(400);
+    await page.locator('#step-4').waitFor({ state: 'visible', timeout: 5000 });
   }
 
-  test('skill input element is present on step 3', async ({ page }) => {
-    await goToStep3(page);
-    const skillInput = page.locator('#skill-input, input[placeholder*="skill" i], input[id*="skill"]');
+  test('skill input element is present on step 4', async ({ page }) => {
+    await goToStep4SkillsExtended(page);
+    const skillInput = page.locator('#skills-input');
     await expect(skillInput.first()).toBeAttached();
   });
 
-  test('skill tags container is present', async ({ page }) => {
-    await goToStep3(page);
-    const tagsContainer = page.locator('#skill-tags, .skill-tags, .tags-container').first();
-    await expect(tagsContainer).toBeAttached();
+  test('skills container is present', async ({ page }) => {
+    await goToStep4SkillsExtended(page);
+    await expect(page.locator('#skills-container')).toBeAttached();
   });
 
-  test('step 3 header says "Skills" or similar', async ({ page }) => {
-    await goToStep3(page);
-    const heading = page.locator('#step-3 h2, #step-3 h3, #step-3 h4').first();
+  test('step 4 header says "Skills"', async ({ page }) => {
+    await goToStep4SkillsExtended(page);
+    const heading = page.locator('#step-4 h2, #step-4 h3, #step-4 h4').first();
     await expect(heading).toBeAttached();
   });
 });
 
 // ---------------------------------------------------------------------------
-// L. COMPLETION FLOW
+// M. COMPLETION FLOW
 // ---------------------------------------------------------------------------
-test.describe('L. Completion Flow', () => {
-  test('complete button is present on step 4', async ({ page }) => {
+test.describe('M. Completion Flow', () => {
+  test('complete button is present on step 5', async ({ page }) => {
     await setupAuth(page);
     await page.goto('/profile/setup');
     await page.waitForLoadState('domcontentloaded');
-    // Navigate to step 4
     await page.locator('#skip-resume-btn').click();
     await page.waitForTimeout(300);
-    // Minimal fills
     const title = page.locator('#professional-title');
     if (await title.isVisible({ timeout: 2000 }).catch(() => false)) await title.fill('Engineer');
     await page.locator('#next-btn').click();
@@ -743,14 +812,18 @@ test.describe('L. Completion Flow', () => {
     if (await noExp.isVisible({ timeout: 2000 }).catch(() => false)) await noExp.check();
     await page.locator('#next-btn').click();
     await page.waitForTimeout(400);
-    const skillInput = page.locator('#skill-input');
+    const noEd = page.locator('#no-education');
+    if (await noEd.isVisible({ timeout: 2000 }).catch(() => false)) await noEd.check();
+    await page.locator('#next-btn').click();
+    await page.waitForTimeout(400);
+    const skillInput = page.locator('#skills-input');
     if (await skillInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await skillInput.fill('Python');
       await skillInput.press('Enter');
     }
     await page.locator('#next-btn').click();
     await page.waitForTimeout(500);
-    await page.locator('#step-4').waitFor({ state: 'visible', timeout: 5000 });
+    await page.locator('#step-5').waitFor({ state: 'visible', timeout: 5000 });
     await expect(page.locator('#complete-btn')).toBeAttached();
   });
 });

@@ -402,6 +402,16 @@ class CoverLetterWriterAgent:
                         desc = desc[:500] + "..."
                     sections.append(f"  {desc}")
 
+        edu_rows = profile.get("education", []) or []
+        if edu_rows:
+            sections.append("\nEducation:")
+            for edu in edu_rows[:3]:
+                inst = edu.get("institution", "N/A")
+                deg = edu.get("degree", "N/A")
+                fos = edu.get("field_of_study")
+                extra = f", {fos}" if fos else ""
+                sections.append(f"\n• {deg} at {inst}{extra}")
+
         return "\n".join(sections)
 
     def _format_job(self, job: Dict[str, Any]) -> str:

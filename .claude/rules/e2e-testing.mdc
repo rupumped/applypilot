@@ -18,7 +18,7 @@ Tests are split into two tiers based on whether they require a live server.
 | `landing.spec.ts` | All landing sections, navbar, CTAs, footer, a11y, cookie consent |
 | `auth-pages.spec.ts` | Login/register/forgot/reset/verify form structure + validation |
 | `interview-prep.spec.ts` | All states, 4 question sub-tabs, generate/complete/mobile |
-| `profile-setup.spec.ts` | 5-step wizard, field validation, step navigation |
+| `profile-setup.spec.ts` | Profile setup (resume + 5 steps: basic → work → education → skills → prefs), field validation, navigation |
 | `application-detail.spec.ts` | 7 tabs, sub-tabs, cover letter, company, mobile layout |
 | `onboarding.spec.ts` | Auto-show/suppress, step nav, skip, complete, `window.Onboarding` API, a11y |
 | `complete-coverage.spec.ts` | Authenticated page coverage: dashboard, settings, career tools, history |

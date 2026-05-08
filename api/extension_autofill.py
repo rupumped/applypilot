@@ -67,6 +67,7 @@ Rules:
 - "assignments" is an array of {"field_uid": string, "value": string}. Use ONLY field_uid values from the input list.
 - "skipped" is an array of {"field_uid": string, "reason": string} for fields you refuse to fill or cannot map.
 - Use ONLY facts present in the provided profile JSON and extras JSON. Do not invent employers, degrees, or credentials.
+- When fields ask for school, university, degree, major, field of study, or graduation dates, map from profile.education when present (each entry may include institution, degree, field_of_study, start_date, end_date, is_current).
 - If a field asks for legally sensitive attestations, diversity/EEO self-ID, or anything you should not infer, skip it.
 - For salary questions, you may use desired_salary_range if present; otherwise skip.
 - Keep values concise. Match the expected format when obvious (e.g. email for email fields).

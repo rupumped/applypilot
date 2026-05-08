@@ -7,7 +7,7 @@
 #   macOS/Linux:  brew install just
 #   Windows:      winget install Casey.Just
 #
-# Option A (Docker):  just start
+# Option A (Docker):  just start   (migrations run inside the app container before uvicorn)
 # Option C (Manual):  just setup && just migrate && just dev
 #
 # One-time sibling copy for safe Just/Docker tests (macOS/Linux; needs python3):
@@ -55,12 +55,12 @@ _ensure-docker:
 # Generate .env + start all services (foreground)
 start: _ensure-docker _create-env
     docker compose pull --ignore-buildable
-    docker compose up
+    docker compose up --build
 
 # Generate .env + start all services (background)
 start-d: _ensure-docker _create-env
     docker compose pull --ignore-buildable
-    docker compose up -d
+    docker compose up --build -d
 
 # Stop all services, keep data
 docker-down:

@@ -31,7 +31,7 @@ ui/static/
 │   ├── auth-reset-password.js          # Password reset page
 │   ├── auth-verify-email.js            # Email verification page
 │   │
-│   ├── profile-setup.js                # 5-step profile setup wizard
+│   ├── profile-setup.js                # Profile setup wizard (resume + 5 steps)
 │   │
 │   ├── cookie-consent.js               # GDPR cookie consent banner
 │   ├── onboarding.js                   # New user onboarding tour
@@ -403,7 +403,7 @@ window.eventBus.emit('application:create', { id: appId });
 - Email verification link handler
 
 ### `profile-setup.js` — Profile Setup Wizard
-- 5-step profile setup (Quick Start → Basic Info → Work Experience → Skills → Preferences)
+- 6-part profile setup (Quick Start → Basic Info → Work Experience → Education → Skills → Preferences)
 - Resume upload with AI auto-fill
 - Internal API helper `makeAuthenticatedApiCall()` (self-contained, intentional)
 - **Years of experience = 0** — required-field and save logic must not use bare truthiness (`if (!years_experience)` / `if (!data[field])` after `parseInt`) — `0` is valid. Populate the numeric input when the saved value is `0` (`!== undefined && !== null`, not `if (years_experience)`). See `.cursor/rules/frontend-js-strict.mdc` (“Required numeric fields”).

@@ -36,8 +36,21 @@
     const WS_MAX_RECONNECT_ATTEMPTS = 8;
     const WS_RECONNECT_BASE_MS = 1000;
 
-    document.addEventListener('DOMContentLoaded', function () {
-        checkAuthentication();
+    /** @returns {boolean} */
+    function requireLogin() {
+        // @ts-ignore
+        const authenticated = window.app ? window.app.isAuthenticated() : !!(localStorage.getItem('access_token') || localStorage.getItem('authToken'));
+        if (!authenticated) {
+            window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login';
+            return false;
+        }
+        return true;
+    }
+
+    document.addEventListener('DOMContentLoaded', async function () {
+        if (!requireLogin()) return;
+        if (typeof window.syncProfileCompletionFromApi !== 'function' || !(await window.syncProfileCompletionFromApi())) return;
+
         const pathParts = window.location.pathname.split('/');
         sessionId = pathParts[pathParts.length - 1];
         if (sessionId) loadInterviewPrep();
@@ -60,13 +73,6 @@
         if (pollAbortController) pollAbortController.abort();
         disconnectWs();
     });
-
-    function checkAuthentication() {
-        // @ts-ignore
-        const authenticated = window.app ? window.app.isAuthenticated() : !!(localStorage.getItem('access_token') || localStorage.getItem('authToken'));
-        if (!authenticated) { window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login'; return; }
-        if (localStorage.getItem('profile_completed') !== 'true') { window.location.href = '/profile/setup'; }
-    }
 
     function getAuthHeaders() {
         const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');

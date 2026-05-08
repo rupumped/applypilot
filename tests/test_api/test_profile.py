@@ -5,6 +5,7 @@ Endpoints:
   GET    /api/v1/profile/
   PUT    /api/v1/profile/basic-info
   PUT    /api/v1/profile/work-experience
+  PUT    /api/v1/profile/education
   PUT    /api/v1/profile/skills-qualifications
   PUT    /api/v1/profile/career-preferences
   GET    /api/v1/profile/status
@@ -135,6 +136,109 @@ class TestUpdateWorkExperience:
         assert st.status_code == 200
         data = st.json()
         assert "work_experience" in data.get("completed_steps", [])
+
+
+# ---------------------------------------------------------------------------
+# PUT /profile/education
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateEducation:
+    """PUT /api/v1/profile/education"""
+
+    @pytest.mark.asyncio
+    async def test_no_auth_returns_401_or_403(self, api_client):
+        resp = await api_client.put(f"{BASE}/education", json={"education": []})
+        assert resp.status_code in (401, 403)
+
+    @pytest.mark.asyncio
+    async def test_empty_list_marks_education_step_complete(self, authed_client_with_user):
+        """Explicit [] is stored in JSONB and counts as completing the education step."""
+        resp = await authed_client_with_user.put(
+            f"{BASE}/education",
+            json={"education": []},
+        )
+        assert resp.status_code in (200, 201, 204)
+        st = await authed_client_with_user.get(f"{BASE}/status")
+        assert st.status_code == 200
+        data = st.json()
+        assert "education" in data.get("completed_steps", [])
+
+    @pytest.mark.asyncio
+    async def test_valid_education_row_accepted(self, authed_client_with_user):
+        resp = await authed_client_with_user.put(
+            f"{BASE}/education",
+            json={
+                "education": [
+                    {
+                        "institution": "State University",
+                        "degree": "Bachelor of Science",
+                        "field_of_study": "Computer Science",
+                        "start_date": "2018-09",
+                        "end_date": "2022-05",
+                        "is_current": False,
+                    }
+                ]
+            },
+        )
+        assert resp.status_code in (200, 201, 204)
+        st = await authed_client_with_user.get(f"{BASE}/status")
+        assert st.status_code == 200
+        assert "education" in st.json().get("completed_steps", [])
+
+    @pytest.mark.asyncio
+    async def test_education_row_without_start_date_rejected(self, authed_client_with_user):
+        """Start date is required for each education entry."""
+        resp = await authed_client_with_user.put(
+            f"{BASE}/education",
+            json={
+                "education": [
+                    {
+                        "institution": "State University",
+                        "degree": "Bachelor of Science",
+                        "field_of_study": "Computer Science",
+                        "end_date": "2022-05",
+                        "is_current": False,
+                    }
+                ]
+            },
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_education_row_institution_degree_only_no_dates_rejected(self, authed_client_with_user):
+        """Institution, degree, field, and dates are required (or Currently enrolled)."""
+        resp = await authed_client_with_user.put(
+            f"{BASE}/education",
+            json={
+                "education": [
+                    {
+                        "institution": "State University",
+                        "degree": "Bachelor of Science",
+                        "field_of_study": "Computer Science",
+                        "is_current": False,
+                    }
+                ]
+            },
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_education_row_missing_field_of_study_rejected(self, authed_client_with_user):
+        """field_of_study is required with institution and degree."""
+        resp = await authed_client_with_user.put(
+            f"{BASE}/education",
+            json={
+                "education": [
+                    {
+                        "institution": "State University",
+                        "degree": "Bachelor of Science",
+                        "is_current": False,
+                    }
+                ]
+            },
+        )
+        assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------

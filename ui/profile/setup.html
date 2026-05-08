@@ -226,6 +226,361 @@
                 border: none !important;
                 transition: all 0.2s ease;
                 transform-origin: left top;
+                /* Let clicks reach the control underneath (month/date pickers, focus) */
+                pointer-events: none;
+            }
+
+            /* Inner row: small gap between month | year within each pair */
+            .profile-month-pair-inner {
+                --bs-gutter-x: 0.5rem;
+            }
+
+            /* Month + year fields — custom dropdown panels (see profile-setup.js createProfileStyledDropdown) */
+            .profile-month-field {
+                color-scheme: dark;
+            }
+
+            /* Flat date row: quartet grows to fill space until the “Currently work here” checkbox */
+            .profile-exp-dates-shell {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                row-gap: 0.75rem;
+                column-gap: 1.5rem;
+                width: 100%;
+            }
+
+            /*
+             * Quartet + invisible trash column — same outer width as Company|Job + trash or
+             * Institution|Degree + trash so fields above align with the four date cells.
+             */
+            .profile-exp-dates-main {
+                display: flex;
+                flex: 1 1 0%;
+                min-width: 0;
+                align-items: center;
+                align-self: center;
+            }
+
+            .profile-exp-dates-main .profile-exp-date-quartet {
+                flex: 1 1 0%;
+                min-width: 0;
+            }
+
+            .profile-exp-date-trash-slot {
+                flex: 0 0 auto;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                align-self: center;
+            }
+
+            .profile-exp-date-quartet {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 0.5rem;
+                min-width: 0;
+                box-sizing: border-box;
+            }
+
+            /* When “currently here” / “currently enrolled”: only start month/year (no duplicate Present cells) */
+            .profile-exp-date-quartet--start-only {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .profile-exp-date-cell {
+                min-width: 0;
+            }
+
+            /* Keep clear space before checkbox — do not rely on margin alone (column-gap on shell + shrink guard) */
+            .profile-exp-date-check-wrap {
+                flex: 0 0 auto;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                min-width: min-content;
+                margin-left: 0;
+                padding-right: 0;
+                padding-left: 0;
+            }
+
+            /*
+             * Bootstrap 5: .form-check has padding-left: 1.5em and .form-check-input has
+             * margin-left: -1.5em (pulls the box left). In a tight flex row that overlaps
+             * the previous column; reset here only.
+             */
+            .profile-exp-dates-shell .profile-exp-date-check-wrap .form-check.profile-exp-current-toggle {
+                padding-left: 0;
+            }
+
+            .profile-exp-dates-shell .profile-exp-date-check-wrap .form-check-input {
+                float: none;
+                margin-left: 0;
+                margin-top: 0;
+                position: static;
+                flex-shrink: 0;
+            }
+
+            @media (max-width: 991.98px) {
+                .profile-exp-dates-main {
+                    flex: 1 1 100%;
+                    width: 100%;
+                    max-width: 100%;
+                }
+
+                .profile-exp-date-check-wrap {
+                    margin-left: 0;
+                    flex: 1 1 100%;
+                    justify-content: flex-start;
+                }
+            }
+
+            /* Extra space between start pair (cols 1–2) and end pair (cols 3–4) */
+            .profile-exp-date-quartet > .profile-exp-date-cell:nth-child(3) {
+                margin-left: var(--profile-exp-pair-extra);
+            }
+
+            .experience-item .profile-exp-company-job-row {
+                --bs-gutter-x: calc(0.5rem + var(--profile-exp-pair-extra));
+            }
+
+            .profile-exp-current-toggle {
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                padding-left: 0.1rem;
+                margin-bottom: 0;
+            }
+
+            .profile-month-field-select {
+                appearance: none;
+                -webkit-appearance: none;
+                background-color: var(--bg-secondary) !important;
+                border: 2px solid var(--border-color) !important;
+                color: var(--text-primary);
+                border-radius: var(--radius-md);
+                padding-top: 0.55rem;
+                padding-bottom: 0.55rem;
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+                accent-color: var(--accent-primary);
+            }
+
+            .profile-month-field-select:focus {
+                border-color: var(--accent-primary) !important;
+                box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.15);
+            }
+
+            /* Present shown in both end dropdowns when current — align like start/end values (left) */
+            .form-floating.profile-dd-floating.profile-dd-end-present-locked .profile-dd-toggle {
+                justify-content: flex-start;
+            }
+
+            .form-floating.profile-dd-floating.profile-dd-end-present-locked .profile-dd-chevron {
+                display: none;
+            }
+
+            /*
+             * Locked end cells use disabled buttons — browser + our rule dim them (grey “Present”).
+             * Force same visual as filled, enabled dropdowns (Jul / 2025).
+             */
+            .form-floating.profile-dd-floating.profile-dd-end-present-locked .profile-dd-toggle:disabled {
+                opacity: 1 !important;
+                cursor: default !important;
+                color: var(--text-primary) !important;
+                border: 2px solid var(--border-color) !important;
+                border-radius: var(--radius-md);
+                background-color: var(--bg-secondary) !important;
+                box-shadow: none;
+            }
+
+            .form-floating.profile-dd-floating.profile-dd-end-present-locked.has-value .profile-dd-toggle:disabled .profile-dd-toggle-text {
+                color: var(--text-primary) !important;
+                opacity: 1;
+                -webkit-text-fill-color: var(--text-primary);
+            }
+
+            /* Month/year dropdowns inside Bootstrap-style floating labels — border/frame match .form-control */
+            .form-floating.profile-dd-floating {
+                position: relative;
+            }
+
+            /*
+             * Lift the whole cell while its menu is open. Adjacent cells use floating labels at
+             * z-index 1210; without this, the next column’s label (“Start year *”) paints over the
+             * open panel’s option list (looks like a duplicate label in the panel footer).
+             */
+            .form-floating.profile-dd-floating:has(.profile-dd-open) {
+                z-index: 1300;
+            }
+
+            .form-floating.profile-dd-floating > .profile-dd {
+                width: 100%;
+            }
+
+            .form-floating.profile-dd-floating .profile-dd-toggle.profile-month-field-select {
+                width: 100%;
+                min-height: calc(3.5rem + 4px);
+                padding: 1.5rem 0.75rem 0.5rem 0.75rem;
+                box-sizing: border-box;
+                -webkit-appearance: none;
+                appearance: none;
+                border: 2px solid var(--border-color) !important;
+                border-radius: var(--radius-md);
+                background-color: var(--bg-secondary) !important;
+                color: var(--text-primary);
+                font-family: inherit;
+                transition: all var(--transition-base);
+                outline: none;
+            }
+
+            .form-floating.profile-dd-floating:focus-within .profile-dd-toggle.profile-month-field-select:not(:disabled) {
+                border-color: var(--accent-primary) !important;
+                box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.15);
+                background-color: var(--bg-secondary) !important;
+            }
+
+            .form-floating.profile-dd-floating .profile-dd-toggle.profile-month-field-select:focus-visible {
+                border-color: var(--accent-primary) !important;
+                box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.15);
+            }
+
+            /* Selected value color — weight/size match .profile-dd-toggle-text + .form-control */
+            .form-floating.profile-dd-floating.has-value .profile-dd-toggle .profile-dd-toggle-text {
+                color: var(--text-primary);
+            }
+
+            .form-floating.profile-dd-floating:not(.has-value):not(:focus-within) .profile-dd-toggle .profile-dd-toggle-text {
+                color: var(--text-muted);
+            }
+
+            /*
+             * Dropdown floating labels: always show the shrunk cyan header like filled text inputs.
+             * Empty month/year have no .has-value — without this, labels stay large/grey in the field.
+             */
+            .form-floating.profile-dd-floating > label {
+                /* Above the closed toggle; open cell uses :has(.profile-dd-open) z-index so the panel
+                 * stays above adjacent labels */
+                z-index: 1210;
+                color: var(--accent-primary) !important;
+                padding: 0.25rem 0.5rem;
+                margin-left: 0.25rem;
+                transform: scale(0.85) translateY(-0.1rem);
+                opacity: 1;
+                font-size: 0.9rem;
+                pointer-events: none;
+                transform-origin: left top;
+                transition: all 0.2s ease;
+                border: none !important;
+                background: transparent !important;
+            }
+
+            .profile-dd {
+                position: relative;
+                z-index: 2;
+            }
+
+            .profile-dd-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                width: 100%;
+                text-align: left;
+            }
+
+            button.profile-dd-toggle.profile-month-field-select:not(:disabled) {
+                opacity: 1;
+                cursor: pointer;
+            }
+
+            button.profile-dd-toggle.profile-month-field-select:disabled {
+                opacity: 0.65;
+                cursor: not-allowed;
+            }
+
+            .profile-dd-toggle-text {
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                font-weight: 400;
+                font-size: 1rem;
+            }
+
+            .profile-dd-chevron {
+                flex-shrink: 0;
+                margin-left: 0.5rem;
+                opacity: 0.85;
+                font-size: 0.75rem;
+                color: var(--text-muted);
+            }
+
+            .profile-dd.profile-dd-open {
+                z-index: 1200;
+            }
+
+            .profile-dd-panel {
+                position: absolute;
+                left: 0;
+                right: 0;
+                top: calc(100% + 4px);
+                z-index: 1080;
+                max-height: 260px;
+                overflow-y: auto;
+                overflow-x: hidden;
+                background: var(--bg-secondary);
+                border: 2px solid var(--border-color);
+                border-radius: var(--radius-md);
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+                padding: 0.25rem 0;
+            }
+
+            .profile-dd-option {
+                display: block;
+                width: 100%;
+                padding: 0;
+                border: none;
+                background: transparent;
+                color: var(--text-primary);
+                cursor: pointer;
+                font-size: 0.95rem;
+            }
+
+            .profile-dd-option-inner {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                width: 100%;
+                padding: 0.45rem 0.75rem;
+            }
+
+            .profile-dd-option:hover .profile-dd-option-inner,
+            .profile-dd-option:focus-visible .profile-dd-option-inner {
+                background: var(--bg-tertiary);
+            }
+
+            .profile-dd-option:focus-visible {
+                outline: none;
+            }
+
+            .profile-dd-check {
+                visibility: hidden;
+                width: 1rem;
+                flex-shrink: 0;
+                text-align: center;
+                color: var(--accent-primary);
+                font-size: 0.75rem;
+            }
+
+            .profile-dd-option[aria-selected="true"] .profile-dd-check {
+                visibility: visible;
+            }
+
+            .profile-dd-option-label {
+                flex: 1;
+                text-align: left;
             }
 
             /* Kill Bootstrap pseudo-elements */
@@ -252,6 +607,15 @@
                 transform: scale(0.85) translateY(-0.1rem);
                 opacity: 1;
                 font-size: 0.9rem;
+            }
+
+            /*
+             * Job description textarea (work experience): label keeps floated placement but fades out
+             * while the user scrolls down so it does not cover text; fades back at scrollTop 0.
+             */
+            .form-floating.profile-exp-job-desc-float.profile-exp-job-desc-scrolled > label {
+                opacity: 0 !important;
+                transition: opacity 0.18s ease;
             }
 
             /* Override browser autofill background */
@@ -340,12 +704,19 @@
 
             /* Experience items */
             .experience-item {
+                --profile-exp-pair-extra: 1rem;
                 border: 2px solid var(--border-color);
                 border-radius: var(--radius-lg);
                 padding: 1.5rem;
                 margin-bottom: 1rem;
                 background: var(--bg-secondary);
                 transition: border-color var(--transition-base);
+            }
+
+            @media (min-width: 992px) {
+                .experience-item {
+                    --profile-exp-pair-extra: 1.5rem;
+                }
             }
 
             .experience-item:hover {
@@ -367,6 +738,21 @@
 
             .remove-experience:hover {
                 color: #ff6b6b;
+            }
+
+            /* Invisible slot: same element as delete (button) so width matches; Field of study col lines up to top row’s right edge */
+            button.remove-experience.profile-exp-trash-slot-placeholder {
+                visibility: hidden;
+                pointer-events: none;
+                cursor: default;
+            }
+
+            button.remove-experience.profile-exp-trash-slot-placeholder:disabled {
+                opacity: 1;
+            }
+
+            .experience-item .profile-exp-education-field-col {
+                min-width: 0;
             }
 
             /* Add experience button */
@@ -820,10 +1206,14 @@
                             </div>
                             <div class="step-indicator" data-step="3">
                                 <div class="step-number">3</div>
-                                <div class="step-label">Skills</div>
+                                <div class="step-label">Education</div>
                             </div>
                             <div class="step-indicator" data-step="4">
                                 <div class="step-number">4</div>
+                                <div class="step-label">Skills</div>
+                            </div>
+                            <div class="step-indicator" data-step="5">
+                                <div class="step-number">5</div>
                                 <div class="step-label">Preferences</div>
                             </div>
                         </div>
@@ -1043,7 +1433,9 @@
                         <!-- Step 2: Work Experience -->
                         <div class="step-form" id="step-2">
                             <h3 class="mb-3">Work Experience *</h3>
-                            <p class="text-muted mb-4">Adding detailed job descriptions significantly improves how the AI matches your profile with roles and tailors your application materials.</p>
+                            <p class="text-muted mb-4">
+                                Adding detailed job descriptions significantly improves how the AI matches your profile with roles and tailors your application materials.
+                            </p>
 
                             <div id="experience-container">
                                 <!-- Experience items will be added here dynamically -->
@@ -1071,14 +1463,43 @@
                             </div>
                         </div>
 
-                        <!-- Step 3: Skills -->
+                        <!-- Step 3: Education -->
                         <div class="step-form" id="step-3">
+                            <h3 class="mb-3">Education</h3>
+                            <p class="text-muted mb-4">
+                                Including schools and programs helps the AI reflect your background accurately when matching you to roles and tailoring resumes and cover letters.
+                                Enter start and end dates for each entry, or mark Currently enrolled if you’re still attending.
+                            </p>
+
+                            <div id="education-container"></div>
+
+                            <div class="add-experience" id="add-education-btn" role="button" tabindex="0">
+                                <i class="fas fa-plus fa-2x mb-2 text-muted"></i>
+                                <p class="mb-0 text-muted">Add education</p>
+                            </div>
+
+                            <div class="form-check mt-3">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    id="no-education"
+                                    name="no_education"
+                                />
+                                <label class="form-check-label" for="no-education">
+                                    I don't have formal education to add
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: Skills -->
+                        <div class="step-form" id="step-4">
                             <h3 class="mb-4">Skills *</h3>
 
                             <!-- Skills -->
                             <div class="form-section">
-                                <p class="text-muted">Add both technical and personal skills. This significantly improves our ability to match you with relevant positions and provide tailored application assistance.</p>
-                                <p class="text-muted">You can select multiple skills.</p>
+                                <p class="text-muted mb-4">
+                                    Add technical and personal skills to improve how we match you to roles and tailor your application materials.
+                                </p>
                                 <div class="form-floating">
                                     <input
                                         type="text"
@@ -1098,9 +1519,12 @@
                             </div>
                         </div>
 
-                        <!-- Step 4: Career Preferences -->
-                        <div class="step-form" id="step-4">
-                            <h3 class="mb-4">Career Preferences</h3>
+                        <!-- Step 5: Career Preferences -->
+                        <div class="step-form" id="step-5">
+                            <h3 class="mb-3">Career Preferences</h3>
+                            <p class="text-muted mb-4">
+                                Sharing salary expectations and how you like to work helps us align suggestions with roles that fit you and tailor your profile for applications.
+                            </p>
 
                             <form id="career-preferences-form">
 

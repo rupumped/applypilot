@@ -75,18 +75,20 @@ stop-local:
 # =============================================================================
 # Creates .env with auto-generated secrets on first run, then starts the app.
 # Docker handles Python, Node, PostgreSQL and Redis — nothing else to install.
+# The app container runs Alembic (docker-entrypoint.sh) before uvicorn — no separate `make migrate`.
+# `up --build` keeps the image in sync with the repo after `git pull` (first run is slower; later runs are cached).
 start:
 	@$(MAKE) _ensure_docker
 	@$(MAKE) _create_env_system
 	docker compose pull --ignore-buildable
-	docker compose up
+	docker compose up --build
 
 # Same but runs in the background (detached).
 start-d:
 	@$(MAKE) _ensure_docker
 	@$(MAKE) _create_env_system
 	docker compose pull --ignore-buildable
-	docker compose up -d
+	docker compose up --build -d
 
 # Checks that Docker is installed and the daemon is running.
 # Does NOT install or start Docker — the user is responsible for that.

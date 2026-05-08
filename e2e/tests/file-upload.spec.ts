@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { DashboardPage, NewApplicationPage } from '../pages';
 import * as path from 'path';
 import * as fs from 'fs';
-import { setupAuth, setupAllMocks, setupProfileMocks } from '../utils/api-mocks';
+import { setupAuth, setupAllMocks } from '../utils/api-mocks';
 
 // Create test files directory and sample files
 const fixturesDir = path.join(__dirname, '../fixtures/files');
@@ -32,26 +32,19 @@ if (!fs.existsSync(jobTxtPath)) {
 }
 
 test.describe('File Upload', () => {
-  
-  test.beforeEach(async ({ page }) => {
-    await setupAuth(page);
-    await setupAllMocks(page);
-  });
-  
+
   test.describe('Resume Upload (Profile Setup)', () => {
-    
+
     test.beforeEach(async ({ page }) => {
-      // Return incomplete profile so dashboard redirects to /profile/setup
-      await page.route('**/api/v1/profile/completion-status', route => route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ profile_completed: false, completion_percentage: 0, missing_sections: ['basic_info'] }),
-      }));
-      await page.route('**/api/v1/profile/parse-resume', route => route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, data: {}, confidence: 'HIGH', processing_time: 1.2 }),
-      }));
+      await setupAuth(page);
+      await setupAllMocks(page, { mockGetProfileCompleted: false });
+      await page.route('**/api/v1/profile/parse-resume', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, data: {}, confidence: 'HIGH', processing_time: 1.2 }),
+        }),
+      );
     });
     
     test('should display resume upload area on profile setup', async ({ page }) => {
@@ -108,7 +101,12 @@ test.describe('File Upload', () => {
   });
   
   test.describe('Job Posting File Upload', () => {
-    
+
+    test.beforeEach(async ({ page }) => {
+      await setupAuth(page);
+      await setupAllMocks(page);
+    });
+
     test('should display file upload tab on new application page', async ({ page }) => {
       await page.goto('/dashboard/new-application');
       await page.waitForLoadState('domcontentloaded');
@@ -135,7 +133,12 @@ test.describe('File Upload', () => {
   });
   
   test.describe('File Size Limits', () => {
-    
+
+    test.beforeEach(async ({ page }) => {
+      await setupAuth(page);
+      await setupAllMocks(page);
+    });
+
     test('should reject files exceeding size limit on new application page', async ({ page }) => {
       await page.goto('/dashboard/new-application');
       await page.waitForLoadState('domcontentloaded');
@@ -157,7 +160,12 @@ test.describe('File Upload', () => {
   });
   
   test.describe('Multiple File Handling', () => {
-    
+
+    test.beforeEach(async ({ page }) => {
+      await setupAuth(page);
+      await setupAllMocks(page);
+    });
+
     test('should handle file replacement on new application page', async ({ page }) => {
       await page.goto('/dashboard/new-application');
       await page.waitForLoadState('domcontentloaded');

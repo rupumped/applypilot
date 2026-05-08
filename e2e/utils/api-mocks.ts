@@ -38,8 +38,8 @@ export const mockProfile = {
   work_experience: [
     {
       company: 'TechCorp Inc',
-      title: 'Senior Software Engineer',
-      start_date: '2020-01-01',
+      job_title: 'Senior Software Engineer',
+      start_date: '2020-01',
       end_date: null,
       is_current: true,
       description: 'Led development of microservices architecture.',
@@ -50,7 +50,10 @@ export const mockProfile = {
     {
       institution: 'UC Berkeley',
       degree: 'BS Computer Science',
-      graduation_year: 2016,
+      field_of_study: 'Computer Science',
+      start_date: '2012-09',
+      end_date: '2016-05',
+      is_current: false,
     },
   ],
   career_preferences: {
@@ -60,6 +63,48 @@ export const mockProfile = {
     work_arrangements: ['remote', 'hybrid'],
   },
 };
+
+/**
+ * Matches GET /api/v1/profile/ response shape (`user_info` + `profile_data` + `completion_status`).
+ * Dashboard `loadUserData()` reads `completion_status.profile_completed`.
+ */
+export function buildMockGetProfileResponse(options: { profileCompleted?: boolean } = {}): Record<string, unknown> {
+  const profileCompleted = options.profileCompleted !== false;
+  const pct = profileCompleted ? 100 : 0;
+  const sectionOk = profileCompleted;
+  return {
+    user_info: {
+      id: mockUser.id,
+      email: mockUser.email,
+      full_name: mockUser.full_name,
+      auth_method: 'email',
+      profile_completed: profileCompleted,
+      has_google_linked: false,
+      has_password: true,
+      created_at: mockUser.created_at,
+      updated_at: mockUser.created_at,
+      last_login: null,
+    },
+    profile_data: { ...mockProfile },
+    completion_status: {
+      basic_info: sectionOk,
+      work_experience: sectionOk,
+      education: sectionOk,
+      skills_qualifications: sectionOk,
+      career_preferences: sectionOk,
+      completion_percentage: pct,
+      profile_completed: profileCompleted,
+    },
+  };
+}
+
+/** True for GET exactly `/api/v1/profile` or `/api/v1/profile/` (not `/profile/status`, etc.). */
+export function isProfileRootDocumentRequest(route: Route): boolean {
+  if (route.request().method() !== 'GET') return false;
+  const u = new URL(route.request().url());
+  const path = u.pathname.replace(/\/$/, '') || '/';
+  return path === '/api/v1/profile';
+}
 
 export const mockWorkflowSession = {
   session_id: 'mock-session-uuid-12345',
@@ -353,9 +398,12 @@ export async function setupAuth(page: Page): Promise<void> {
 /**
  * Setup all API mocks for comprehensive testing
  */
-export async function setupAllMocks(page: Page): Promise<void> {
+export async function setupAllMocks(
+  page: Page,
+  profileOptions?: ProfileMocksOptions,
+): Promise<void> {
   await setupAuthMocks(page);
-  await setupProfileMocks(page);
+  await setupProfileMocks(page, profileOptions);
   await setupWorkflowMocks(page);
   await setupToolsMocks(page);
   await setupMiscMocks(page);
@@ -495,20 +543,35 @@ export async function setupAuthMocks(page: Page): Promise<void> {
 }
 
 /**
+ * Options for {@link setupProfileMocks}.
+ */
+export type ProfileMocksOptions = {
+  /** GET /api/v1/profile root — default fully complete (all five sections). */
+  mockGetProfileCompleted?: boolean;
+};
+
+/**
  * Setup profile API mocks
  */
-export async function setupProfileMocks(page: Page): Promise<void> {
-  // Get profile
-  await page.route('**/api/v1/profile', async (route) => {
-    if (route.request().method() === 'GET') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(mockProfile),
-      });
-    } else {
+export async function setupProfileMocks(
+  page: Page,
+  options?: ProfileMocksOptions,
+): Promise<void> {
+  const getProfileCompleted = options?.mockGetProfileCompleted !== false;
+
+  // GET /api/v1/profile/ — must match production shape (dashboard reads completion_status)
+  await page.route('**/api/v1/profile**', async (route) => {
+    if (!isProfileRootDocumentRequest(route)) {
       await route.continue();
+      return;
     }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        buildMockGetProfileResponse({ profileCompleted: getProfileCompleted }),
+      ),
+    });
   });
   
   // Update basic info
@@ -528,9 +591,18 @@ export async function setupProfileMocks(page: Page): Promise<void> {
       body: JSON.stringify({ message: 'Work experience updated' }),
     });
   });
+
+  // Update education (profile setup step 3)
+  await page.route('**/api/v1/profile/education', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'Education updated' }),
+    });
+  });
   
-  // Update skills
-  await page.route('**/api/v1/profile/skills', async (route) => {
+  // Update skills (canonical path)
+  await page.route('**/api/v1/profile/skills-qualifications', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -547,7 +619,28 @@ export async function setupProfileMocks(page: Page): Promise<void> {
     });
   });
   
-  // Profile completion status
+  // Profile completion status (canonical endpoint)
+  await page.route('**/api/v1/profile/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        profile_completed: true,
+        completion_percentage: 100,
+        completed_steps: [
+          'basic_info',
+          'work_experience',
+          'education',
+          'skills_qualifications',
+          'career_preferences',
+        ],
+        missing_steps: [],
+        next_step: null,
+      }),
+    });
+  });
+
+  // Legacy alias used by some tests — keep until callers migrate to /profile/status
   await page.route('**/api/v1/profile/completion-status', async (route) => {
     await route.fulfill({
       status: 200,

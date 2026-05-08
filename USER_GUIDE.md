@@ -49,7 +49,7 @@ After creating an account, you may be asked to verify your email:
 
 ## Profile Setup
 
-Your profile is the foundation for all AI-generated content. The setup wizard has 4 steps.
+Your profile is the foundation for all AI-generated content. The setup wizard has 5 steps.
 
 ### Quick Start: Resume Upload (Recommended)
 
@@ -87,14 +87,26 @@ Click "Fill in manually" to skip the upload and enter everything by hand.
 
 The app stores an empty work history when that box is checked so **Complete Setup** and profile completion on the server can succeed.
 
-### Step 3: Skills
+### Step 3: Education
+
+1. Click **Add Education** for each school or program
+2. Enter institution, degree, field of study, and start date (month and year)
+3. Add an end or graduation date, or mark **Currently enrolled** if you are still in school
+4. Add multiple entries as needed
+
+**Either / or:**
+
+- **You have formal education:** add **at least one** complete entry (institution, degree, field of study, and start date are required; add an end date unless you mark **Currently enrolled**).
+- **You have no formal education to list:** check **"I don't have formal education to add"**. That saves an empty education list so this step counts as complete—you do not need to add a placeholder school.
+
+### Step 4: Skills
 
 - Type a skill and press **Enter** to add it
 - Add both technical skills (Python, SQL) and personal skills (Leadership, Communication)
 - Aim for 5–10 relevant skills for better match accuracy
 - Click the **×** to remove a skill
 
-### Step 4: Career Preferences
+### Step 5: Career Preferences
 
 | Field | Options |
 |-------|---------|

@@ -397,6 +397,20 @@ class ResumeAdvisorAgent:
                 if exp.get("description"):
                     sections.append(f"   {exp['description']}")
 
+        edu_rows = profile.get("education", []) or []
+        if edu_rows:
+            sections.append("\nEducation:")
+            for i, edu in enumerate(edu_rows, 1):
+                deg = edu.get("degree", "N/A")
+                inst = edu.get("institution", "N/A")
+                start = edu.get("start_date", "N/A")
+                end = edu.get("end_date", "Present") if edu.get("is_current") else edu.get("end_date", "N/A")
+                fos = edu.get("field_of_study")
+                line = f"\n{i}. {deg} — {inst} ({start} - {end})"
+                if fos:
+                    line += f" — Field: {fos}"
+                sections.append(line)
+
         return "\n".join(sections)
 
     def _format_job(self, job: Dict[str, Any]) -> str:

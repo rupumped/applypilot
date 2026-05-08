@@ -485,10 +485,13 @@ def _clean_work_experience(exp: Dict[str, Any]) -> Dict[str, Any]:
 
 def _clean_education(edu: Dict[str, Any]) -> Dict[str, Any]:
     """Clean and validate an education entry."""
+    field_val = edu.get("field_of_study") or edu.get("field")
+    field_clean = str(field_val).strip() if field_val else None
     return {
         "institution": str(edu.get("institution", "")).strip() or None,
         "degree": str(edu.get("degree", "")).strip() or None,
-        "field": str(edu.get("field", "")).strip() or None,
+        "field": field_clean,
+        "field_of_study": field_clean,
         "graduation_date": str(edu.get("graduation_date", "")).strip() or None,
         "gpa": str(edu.get("gpa", "")).strip() if edu.get("gpa") else None,
     }

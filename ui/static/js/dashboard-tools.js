@@ -34,8 +34,20 @@
         if (container) container.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show" role="alert"><i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>${escapeHtml(message)}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
-        checkAuthentication();
+    /** @returns {boolean} */
+    function requireLogin() {
+        // @ts-ignore
+        const authenticated = window.app ? window.app.isAuthenticated() : !!(localStorage.getItem('access_token') || localStorage.getItem('authToken'));
+        if (!authenticated) {
+            window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login';
+            return false;
+        }
+        return true;
+    }
+
+    document.addEventListener('DOMContentLoaded', async function () {
+        if (!requireLogin()) return;
+        if (typeof window.syncProfileCompletionFromApi !== 'function' || !(await window.syncProfileCompletionFromApi())) return;
 
         // Live character counters for Job Comparison detail textareas
         ['job1Description', 'job2Description', 'job3Description'].forEach(id => {
@@ -90,13 +102,6 @@
             }
         });
     });
-
-    function checkAuthentication() {
-        // @ts-ignore
-        const authenticated = window.app ? window.app.isAuthenticated() : !!(localStorage.getItem('access_token') || localStorage.getItem('authToken'));
-        if (!authenticated) { window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login'; return; }
-        if (localStorage.getItem('profile_completed') !== 'true') { window.location.href = '/profile/setup'; }
-    }
 
     function getAuthToken() {
         // @ts-ignore

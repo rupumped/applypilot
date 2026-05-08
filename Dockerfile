@@ -68,8 +68,13 @@ COPY --chown=appuser:appuser . .
 # Copy the built frontend assets from the Node stage (overwrites empty dist/)
 COPY --from=frontend-builder --chown=appuser:appuser /app/ui/static/dist ./ui/static/dist
 
+# Alembic runs before uvicorn (see docker-entrypoint.sh) so `docker compose up` needs no separate migrate step.
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Switch to non-root user
 USER appuser
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 # Default port — override with PORT env var or docker run -p
 ENV PORT=8000
@@ -80,7 +85,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8000
 
 # Health check (uses unauthenticated /health endpoint)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+# Longer start-period: migration runs before uvicorn binds (fresh DB can take a few seconds).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the application

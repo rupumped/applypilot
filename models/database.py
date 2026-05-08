@@ -238,6 +238,9 @@ class UserProfile(Base):
     work_experience: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
         JSONB, nullable=True, default=None
     )
+    education: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
+        JSONB, nullable=True, default=None
+    )
     skills: Mapped[Optional[List[str]]] = mapped_column(
         JSONB, nullable=True, default=None
     )
@@ -286,6 +289,7 @@ class UserProfile(Base):
             "summary": self.summary,
             "is_student": self.is_student,
             "work_experience": self.work_experience or [],
+            "education": self.education or [],
             "skills": self.skills or [],
             "desired_salary_range": self.desired_salary_range or {},
             "desired_company_sizes": self.desired_company_sizes or [],

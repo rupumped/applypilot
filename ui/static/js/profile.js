@@ -24,6 +24,14 @@
  * @class
  */
 class ProfileManager {
+  static normalizeYearMonth(value) {
+    if (value == null || value === "") return "";
+    const s = String(value).trim();
+    if (/^\d{4}-\d{2}$/.test(s)) return s;
+    if (s.length >= 10 && s[4] === "-") return s.slice(0, 7);
+    return s.length >= 7 ? s.slice(0, 7) : s;
+  }
+
   /**
    * Escape HTML special characters to prevent XSS.
    * @param {string|null|undefined} str
@@ -46,11 +54,11 @@ class ProfileManager {
     /** @type {string} Base URL for API calls */
     this.apiBaseUrl = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || '/api/v1';
     
-    /** @type {number} Current step in the wizard (1-4) */
+    /** @type {number} Current step in the wizard (1-5) */
     this.currentStep = 1;
     
     /** @type {number} Total number of steps */
-    this.maxSteps = 4;
+    this.maxSteps = 5;
     
     /** @type {Object} Profile data being edited */
     this.profileData = {};
@@ -1275,10 +1283,13 @@ class ProfileManager {
     // Step 2: Work Experience
     await this.saveWorkExperience();
     
-    // Step 3: Skills & Qualifications
+    // Step 3: Education
+    await this.saveEducation();
+    
+    // Step 4: Skills & Qualifications
     await this.saveSkillsQualifications();
     
-    // Step 4: Career Preferences
+    // Step 5: Career Preferences
     await this.saveCareerPreferences();
   }
 
@@ -1305,33 +1316,76 @@ class ProfileManager {
    * Save work experience (step 2)
    */
   async saveWorkExperience() {
-    const workExperience = {
-      experience: this.profileData.experience || []
-    };
+    const raw = this.profileData.experience || [];
+    const work_experience = raw
+      .map((exp) => ({
+        company_name: exp.company_name || exp.company || "",
+        job_title: exp.job_title || exp.title || "",
+        description: exp.description || exp.employment_notes || "",
+        start_date: exp.start_date || "",
+        end_date: exp.end_date || null,
+        is_current: Boolean(exp.is_current || exp.current),
+      }))
+      .filter((row) => row.company_name && row.job_title && row.start_date);
 
-    const response = await this.apiCall("/profile/work-experience", "PUT", workExperience);
+    const response = await this.apiCall("/profile/work-experience", "PUT", {
+      work_experience,
+    });
     return response;
   }
 
   /**
-   * Save skills & qualifications (step 3)
+   * Save education (step 3) — aligns with PUT /api/v1/profile/education
+   */
+  async saveEducation() {
+    const raw = this.profileData.education || [];
+    const education = raw
+      .map((edu) => ({
+        institution: edu.institution || "",
+        degree: edu.degree || "",
+        field_of_study: edu.field_of_study || edu.field || null,
+        start_date: ProfileManager.normalizeYearMonth(edu.start_date),
+        end_date: edu.end_date ? ProfileManager.normalizeYearMonth(edu.end_date) : null,
+        is_current: Boolean(edu.is_current || edu.current),
+      }))
+      .filter((row) => row.institution && row.degree && row.start_date);
+
+    const response = await this.apiCall("/profile/education", "PUT", { education });
+    return response;
+  }
+
+  /**
+   * Save skills & qualifications (step 4)
    */
   async saveSkillsQualifications() {
-    const skillsData = {
-      technical_skills: this.profileData.technical_skills || [],
-      soft_skills: this.profileData.soft_skills || [],
-      industry_knowledge: this.profileData.industry_knowledge || [],
-      tools_technologies: this.profileData.tools_technologies || [],
-      education: this.profileData.education || [],
-      certifications: this.profileData.certifications || []
-    };
+    const buckets = [
+      this.profileData.skills,
+      this.profileData.technical_skills,
+      this.profileData.soft_skills,
+      this.profileData.industry_knowledge,
+      this.profileData.tools_technologies,
+    ];
+    const seen = new Set();
+    const skills = [];
+    for (const b of buckets) {
+      if (!Array.isArray(b)) continue;
+      for (const s of b) {
+        const t = String(s).trim();
+        if (!t) continue;
+        const k = t.toLowerCase();
+        if (!seen.has(k)) {
+          seen.add(k);
+          skills.push(t);
+        }
+      }
+    }
 
-    const response = await this.apiCall("/profile/skills-qualifications", "PUT", skillsData);
+    const response = await this.apiCall("/profile/skills-qualifications", "PUT", { skills });
     return response;
   }
 
   /**
-   * Save career preferences (step 4)
+   * Save career preferences (step 5)
    */
   async saveCareerPreferences() {
     const careerPrefs = this.extractCareerPreferencesData();

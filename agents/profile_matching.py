@@ -132,7 +132,8 @@ IMPORTANT: Your response must be ONLY the JSON object below. No explanations, no
             "score": <number between 0.0 and 1.0>,
             "degree_level_match": "<EXCEEDS or MEETS or BELOW or NOT_REQUIRED>",
             "field_relevance": "<EXACT_MATCH or RELATED or TRANSFERABLE or UNRELATED>",
-            "education_notes": "<Any relevant observations>"
+            "education_notes": "<Any relevant observations>",
+            "profile_education_summary": "<One line listing institution and degree from the EDUCATION section of the profile when present; if none, say so>"
         }},
         "certification_assessment": {{
             "score": <number between 0.0 and 1.0>,
@@ -540,6 +541,29 @@ class ProfileMatchingAgent:
         else:
             exp_section += "No work experience listed\n"
 
+        edu_rows = profile.get("education", []) or []
+        edu_section = "\n### EDUCATION\n"
+        if edu_rows:
+            for i, edu in enumerate(edu_rows, 1):
+                inst = edu.get("institution", "N/A")
+                deg = edu.get("degree", "N/A")
+                fos = edu.get("field_of_study") or "Not specified"
+                start_d = edu.get("start_date", "N/A")
+                end_d = edu.get("end_date")
+                if edu.get("is_current"):
+                    dur = f"{start_d} to Present (currently enrolled)"
+                else:
+                    dur = f"{start_d} to {end_d or 'N/A'}"
+                edu_section += f"""
+**Program {i}:**
+- Institution: {inst}
+- Degree: {deg}
+- Field of study: {fos}
+- Duration: {dur}
+"""
+        else:
+            edu_section += "No structured education entries listed.\n"
+
         # Preferences
         salary_range = profile.get("desired_salary_range", {})
         if salary_range and salary_range.get("min") and salary_range.get("max"):
@@ -572,6 +596,7 @@ class ProfileMatchingAgent:
             + summary_section
             + skills_section
             + exp_section
+            + edu_section
             + preferences_section
             + constraints_section
         )

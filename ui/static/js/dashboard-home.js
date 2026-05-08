@@ -1247,19 +1247,27 @@
         } else {
             if (!getAuthToken()) { window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login'; return false; }
         }
-        // Fast localStorage guard — consistent with other dashboard pages; loadUserData() provides
-        // the authoritative server-side confirmation and handles edge cases like stale localStorage.
-        if (localStorage.getItem('profile_completed') !== 'true') { window.location.href = '/profile/setup'; return false; }
         return true;
     }
 
+    /**
+     * Load profile from API (authoritative for completion). Syncs localStorage
+     * profile_completed from completion_status so it cannot drift after migrations.
+     * @returns {Promise<boolean>} false if redirected or error — caller should stop init
+     */
     async function loadUserData() {
         const token = getAuthToken();
-        if (!token) { window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login'; return; }
+        if (!token) { window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login'; return false; }
         try {
             const response = await fetch(`${API_BASE}/profile/`, { headers: { Authorization: `Bearer ${token}` } });
             if (response.ok) {
                 const data = await response.json();
+                const completed = Boolean(data.completion_status?.profile_completed);
+                localStorage.setItem('profile_completed', completed ? 'true' : 'false');
+                if (!completed) {
+                    window.location.href = '/profile/setup';
+                    return false;
+                }
                 const fullName   = data.user_info?.full_name || 'User';
                 const userNameEl = document.getElementById('userName');
                 if (userNameEl) userNameEl.textContent = fullName;
@@ -1269,16 +1277,18 @@
                 }
                 const avatarEl = document.getElementById('userAvatar');
                 if (avatarEl) avatarEl.textContent = fullName[0].toUpperCase();
-                if (!data.completion_status?.profile_completed) {
-                    window.location.href = '/profile/setup';
-                }
+                return true;
             } else if (response.status === 401) {
                 logout();
+                return false;
             } else if (response.status === 404) {
                 window.location.href = '/profile/setup';
+                return false;
             }
+            return false;
         } catch (error) {
             console.error('Error loading user data:', error);
+            return false;
         }
     }
 
@@ -1319,6 +1329,9 @@
         await exchangeOAuthCodeIfPresent();
         if (!checkAuthentication()) return;
 
+        const profileOk = await loadUserData();
+        if (!profileOk) return;
+
         connectUserWs();
 
         // Clear the navbar badge dot — user is on the dashboard, toasts appear natively
@@ -1337,7 +1350,6 @@
         // Restore filter state from sessionStorage (browser back navigation)
         const savedScrollY = restoreFilterState();
 
-        loadUserData();
         loadStats();
 
         // Initial load — use restored filters

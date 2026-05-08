@@ -4,11 +4,12 @@
     // ================================================================
     // APPLYPILOT - PROFILE SETUP
     // ================================================================
-    // 4-Step Profile Setup Implementation
+    // 5-Step Profile Setup (plus optional Step 0 resume upload)
     // Step 1: Basic Information + Professional Summary
-    // Step 2: Work Experience (minimum 1 entry required)
-    // Step 3: Skills
-    // Step 4: Career Preferences (job types, company sizes, arrangements)
+    // Step 2: Work Experience (or explicit "no experience")
+    // Step 3: Education (or explicit "no formal education")
+    // Step 4: Skills
+    // Step 5: Career Preferences (job types, company sizes, arrangements)
     //
     // Features:
     // - Form validation with detailed error messages
@@ -30,11 +31,13 @@
     }
 
     let currentStep = 0;  // Start at step 0 (resume upload)
-    const totalSteps = 5; // 0: Resume, 1: Basic Info, 2: Experience, 3: Skills, 4: Preferences
+    const totalSteps = 5; // Form steps 1–5: Basic, Experience, Education, Skills, Preferences (step 0 = resume)
 
     // Data collections for dynamic form sections
     let skills = [];
     let workExperience = [];
+    /** @type {Array<{institution: string, degree: string, field_of_study: string, start_date: string, end_date: string, is_current: boolean}>} */
+    let educationHistory = [];
 
     // In-flight request tracker — aborted on page unload
     let _pageAbortController = new AbortController();
@@ -103,6 +106,7 @@
     const successMessage = document.getElementById("success-message");
     const skillsContainer = document.getElementById("skills-container");
     const experienceContainer = document.getElementById("experience-container");
+    const educationContainer = document.getElementById("education-container");
 
     /**
      * If the URL contains ?code= from an OAuth callback, exchange it for a JWT
@@ -306,6 +310,11 @@
         workExperience = Array.isArray(profileData.work_experience)
             ? profileData.work_experience
             : [];
+        workExperience.forEach((exp) => {
+            if (String(exp.end_date || "").trim()) {
+                exp.is_current = false;
+            }
+        });
         renderWorkExperience();
         const noExpOnLoad = /** @type {HTMLInputElement|null} */ (document.getElementById("no-experience"));
         if (noExpOnLoad) {
@@ -319,6 +328,26 @@
         if (profileData.skills) {
             skills = profileData.skills;
             renderSkills();
+        }
+
+        educationHistory = Array.isArray(profileData.education) ? profileData.education : [];
+        educationHistory.forEach((edu) => {
+            const endLike = edu.end_date || edu.graduation_date;
+            if (String(endLike || "").trim()) {
+                edu.is_current = false;
+            }
+        });
+        renderEducation();
+        const noEdOnLoad = /** @type {HTMLInputElement|null} */ (document.getElementById("no-education"));
+        if (noEdOnLoad) {
+            noEdOnLoad.checked = educationHistory.length === 0;
+            if (noEdOnLoad.checked) {
+                noEdOnLoad.dispatchEvent(new Event("change"));
+            }
+        }
+
+        if (profileData.is_student !== undefined && document.getElementById("is-student")) {
+            /** @type {HTMLInputElement} */ (document.getElementById("is-student")).checked = !!profileData.is_student;
         }
 
         // Job preferences
@@ -457,10 +486,13 @@
                 case 2: // Work Experience
                     isValid = validateWorkExperience();
                     break;
-                case 3: // Skills
+                case 3: // Education
+                    isValid = validateEducation();
+                    break;
+                case 4: // Skills
                     isValid = validateSkillsQualifications();
                     break;
-                case 4: // Career Preferences
+                case 5: // Career Preferences
                     isValid = validateCareerPreferences();
                     break;
                 default:
@@ -531,6 +563,22 @@
                 } else {
                     if (addExperienceBtn) { addExperienceBtn.style.opacity = "1"; addExperienceBtn.style.pointerEvents = "auto"; }
                     if (container) container.style.opacity = "1";
+                }
+            });
+        }
+
+        document.getElementById("add-education-btn")?.addEventListener("click", addEducation);
+        const noEducationCheckbox = /** @type {HTMLInputElement|null} */ (document.getElementById("no-education"));
+        const addEducationBtn = /** @type {HTMLElement|null} */ (document.getElementById("add-education-btn"));
+        if (noEducationCheckbox) {
+            noEducationCheckbox.addEventListener("change", function() {
+                const ec = educationContainer || document.getElementById("education-container");
+                if (this.checked) {
+                    if (addEducationBtn) { addEducationBtn.style.opacity = "0.5"; addEducationBtn.style.pointerEvents = "none"; }
+                    if (ec) ec.style.opacity = "0.5";
+                } else {
+                    if (addEducationBtn) { addEducationBtn.style.opacity = "1"; addEducationBtn.style.pointerEvents = "auto"; }
+                    if (ec) ec.style.opacity = "1";
                 }
             });
         }
@@ -857,13 +905,16 @@
 
             // Add each work experience (matching existing data structure)
             for (const exp of data.work_experience) {
+                const endYm = formatDateForInput(exp.end_date);
+                const hasEnd = !!String(endYm).trim();
+                const isCurrent = !!(exp.is_current && !hasEnd);
                 workExperience.push({
                     company: exp.company || "",
                     job_title: exp.title || exp.job_title || "",
                     start_date: formatDateForInput(exp.start_date),
-                    end_date: exp.is_current ? "" : formatDateForInput(exp.end_date),
+                    end_date: hasEnd ? endYm : "",
                     description: exp.description || "",
-                    is_current: exp.is_current || false
+                    is_current: isCurrent,
                 });
             }
 
@@ -877,7 +928,40 @@
             }
         }
 
-        // Step 3: Skills
+        // Step 3: Education (parsed resume)
+        if (data.education && data.education.length > 0) {
+            educationHistory = [];
+            for (const edu of data.education) {
+                const endYm = formatDateForInput(edu.graduation_date || edu.end_date || "");
+                const hasEnd = !!String(endYm).trim();
+                const isCurrent = !!(edu.is_current && !hasEnd);
+                let startYm = formatDateForInput(edu.start_date || "");
+                if (!startYm && endYm) {
+                    const parts = endYm.split("-");
+                    const y = parseInt(parts[0], 10);
+                    const m = parseInt(parts[1], 10) || 9;
+                    if (!Number.isNaN(y)) {
+                        startYm = `${Math.max(1900, y - 4)}-${String(m).padStart(2, "0")}`;
+                    }
+                }
+                educationHistory.push({
+                    institution: edu.institution || "",
+                    degree: edu.degree || "",
+                    field_of_study: edu.field_of_study || edu.field || "",
+                    start_date: startYm,
+                    end_date: hasEnd ? endYm : "",
+                    is_current: isCurrent,
+                });
+            }
+            renderEducation();
+            const noEdEl = /** @type {HTMLInputElement|null} */ (document.getElementById("no-education"));
+            if (noEdEl && noEdEl.checked) {
+                noEdEl.checked = false;
+                noEdEl.dispatchEvent(new Event("change"));
+            }
+        }
+
+        // Step 4: Skills
         if (data.skills && data.skills.length > 0) {
             // Clear existing skills
             skills = [];
@@ -970,9 +1054,8 @@
      * Step 0 (resume upload) doesn't count in progress - progress is for steps 1-4
      */
     function updateProgressBar() {
-        // Progress is calculated based on steps 1-4 (Basic Info to Preferences)
-        // Step 0 is the resume upload intro, not part of the main progress
-        const mainSteps = 4; // Steps 1, 2, 3, 4
+        // Progress is calculated based on steps 1–5 (Basic Info through Preferences)
+        const mainSteps = 5;
         const adjustedStep = Math.max(0, currentStep); // Current position in main flow
         const progress = currentStep === 0 ? 0 : (adjustedStep / mainSteps) * 100;
         progressBar.style.width = `${progress}%`;
@@ -1010,8 +1093,8 @@
             completeBtn.style.display = "none";
         } else {
             prevBtn.style.display = currentStep > 1 ? "block" : "none";
-            nextBtn.style.display = currentStep < 4 ? "block" : "none";
-            completeBtn.style.display = currentStep === 4 ? "block" : "none";
+            nextBtn.style.display = currentStep < 5 ? "block" : "none";
+            completeBtn.style.display = currentStep === 5 ? "block" : "none";
         }
 
         // Update completion summary on final step
@@ -1028,8 +1111,10 @@
             case 2:
                 return validateWorkExperience();
             case 3:
-                return validateSkillsQualifications();
+                return validateEducation();
             case 4:
+                return validateSkillsQualifications();
+            case 5:
                 return validateCareerPreferences();
             default:
                 return true;
@@ -1157,7 +1242,39 @@
     }
 
     /**
-     * Validate skills step (Step 3)
+     * Validate education step (Step 3): at least one entry or "no formal education" checked.
+     */
+    function validateEducation() {
+        const noEd = /** @type {HTMLInputElement|null} */ (document.getElementById("no-education"));
+        if (noEd && noEd.checked) {
+            return true;
+        }
+        if (!educationHistory || educationHistory.length < 1) {
+            showError('Please add at least one education entry or check "I don\'t have formal education to add".');
+            return false;
+        }
+        for (let i = 0; i < educationHistory.length; i++) {
+            const edu = educationHistory[i];
+            if (!edu.institution?.trim() || !edu.degree?.trim() || !edu.field_of_study?.trim()) {
+                showError(`Education entry ${i + 1}: Please fill in Institution, Degree, and Field of study`);
+                return false;
+            }
+            if (!edu.start_date?.trim()) {
+                showError(`Education entry ${i + 1}: Please fill in Start month and year`);
+                return false;
+            }
+            if (!edu.is_current && !edu.end_date?.trim()) {
+                showError(
+                    `Education entry ${i + 1}: Please fill in End month and year, or check Currently enrolled`,
+                );
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Validate skills step (Step 4)
      * Ensures minimum requirements for skills (at least one skill required)
      */
     function validateSkillsQualifications() {
@@ -1182,7 +1299,7 @@
     }
 
     /**
-     * Validate career preferences step (Step 4)
+     * Validate career preferences step (Step 5)
      * Ensures all required fields are completed according to requirements:
      * - Minimum & Maximum Salary: Required
      * - Job Types: At least one required
@@ -1287,6 +1404,9 @@
                     success = await saveWorkExperience();
                     break;
                 case 3:
+                    success = await saveEducation();
+                    break;
+                case 4:
                     // For skills step, make sure we have at least one skill
                     if (skills.length === 0) {
                         const skillsContainer = document.getElementById("skills-container");
@@ -1301,7 +1421,7 @@
                     }
                     success = await saveSkillsQualifications();
                     break;
-                case 4:
+                case 5:
                     success = await saveCareerPreferences();
                     break;
                 default:
@@ -1489,6 +1609,70 @@
         }
     }
 
+    /**
+     * Persist education (Step 3)
+     * @returns {Promise<boolean>}
+     */
+    async function saveEducation() {
+        try {
+            const noEd = /** @type {HTMLInputElement|null} */ (document.getElementById("no-education"));
+            if (noEd && noEd.checked) {
+                educationHistory = [];
+                await makeAuthenticatedApiCall("/profile/education", "PUT", {
+                    education: [],
+                });
+                return true;
+            }
+            if (!educationHistory || educationHistory.length === 0) {
+                showError(
+                    'Please add at least one education entry or check "I don\'t have formal education to add".',
+                );
+                return false;
+            }
+            const toSave = JSON.parse(JSON.stringify(educationHistory));
+            for (let i = 0; i < toSave.length; i++) {
+                const edu = toSave[i];
+                if (!edu.institution?.trim() || !edu.degree?.trim() || !edu.field_of_study?.trim()) {
+                    toSave.splice(i, 1);
+                    i--;
+                    continue;
+                }
+                if (!edu.start_date?.trim()) {
+                    showError(`Education entry ${i + 1}: Please fill in Start month and year`);
+                    return false;
+                }
+                if (!edu.is_current && !edu.end_date?.trim()) {
+                    showError(
+                        `Education entry ${i + 1}: Please fill in End month and year, or check Currently enrolled`,
+                    );
+                    return false;
+                }
+                if (edu.is_current) {
+                    edu.end_date = null;
+                }
+                if (edu.start_date && !/^\d{4}-\d{2}$/.test(edu.start_date)) {
+                    edu.start_date = formatDateForInput(edu.start_date);
+                }
+                if (edu.end_date && !/^\d{4}-\d{2}$/.test(edu.end_date)) {
+                    edu.end_date = formatDateForInput(edu.end_date);
+                }
+                if (edu.field_of_study !== undefined && edu.field_of_study !== null) {
+                    edu.field_of_study = String(edu.field_of_study).trim();
+                }
+            }
+            if (toSave.length === 0) {
+                await makeAuthenticatedApiCall("/profile/education", "PUT", { education: [] });
+                return true;
+            }
+            await makeAuthenticatedApiCall("/profile/education", "PUT", { education: toSave });
+            return true;
+        } catch (error) {
+            console.error("Error saving education:", error);
+            showError("Failed to save education: " + error.message);
+            return false;
+        }
+    }
+
     async function saveSkillsQualifications() {
         try {
 
@@ -1671,8 +1855,9 @@
             const stepValidations = [
                 { step: 1, fn: validateBasicInfo },
                 { step: 2, fn: validateWorkExperience },
-                { step: 3, fn: validateSkillsQualifications },
-                { step: 4, fn: validateCareerPreferences },
+                { step: 3, fn: validateEducation },
+                { step: 4, fn: validateSkillsQualifications },
+                { step: 5, fn: validateCareerPreferences },
             ];
 
             for (const { step, fn } of stepValidations) {
@@ -1753,6 +1938,31 @@
             } catch (error) {
                 console.error("Error saving work experience:", error);
                 showError("Error saving work experience: " + (error.message || "Unknown error"));
+                setLoading(false);
+                return false;
+            }
+
+            // Save education
+            try {
+                if (validateEducation()) {
+                    const eduResult = await saveEducation();
+                    if (!eduResult) {
+                        console.error("Education save returned false");
+                        showError("Failed to save education. Please try again.");
+                        setLoading(false);
+                        return false;
+                    }
+                } else {
+                    console.error("Education validation failed");
+                    showError(
+                        'Please add at least one education entry or check "I don\'t have formal education to add".',
+                    );
+                    setLoading(false);
+                    return false;
+                }
+            } catch (error) {
+                console.error("Error saving education:", error);
+                showError("Error saving education: " + (error.message || "Unknown error"));
                 setLoading(false);
                 return false;
             }
@@ -1927,6 +2137,399 @@
         renderWorkExperience();
     }
 
+    /** @type {null | (() => void)} */
+    let _profileMonthDdCloser = null;
+
+    function closeOpenProfileMonthDropdown() {
+        if (typeof _profileMonthDdCloser === "function") {
+            try {
+                _profileMonthDdCloser();
+            } catch (_e) {
+                /* ignore */
+            }
+            _profileMonthDdCloser = null;
+        }
+    }
+
+    /**
+     * Place the date quartet beside an invisible trash column so total width matches the text rows
+     * (col + col + delete button).
+     * @param {HTMLDivElement} shell
+     * @param {HTMLDivElement} quartet
+     */
+    function appendProfileDatesMainWithTrashSlot(shell, quartet) {
+        const main = document.createElement("div");
+        main.className = "profile-exp-dates-main";
+        main.appendChild(quartet);
+        const dateTrashSlot = document.createElement("div");
+        dateTrashSlot.className = "profile-exp-date-trash-slot";
+        const dateTrashPh = document.createElement("button");
+        dateTrashPh.type = "button";
+        dateTrashPh.className = "remove-experience profile-exp-trash-slot-placeholder";
+        dateTrashPh.tabIndex = -1;
+        dateTrashPh.disabled = true;
+        dateTrashPh.setAttribute("aria-hidden", "true");
+        dateTrashPh.innerHTML = '<i class="fas fa-trash"></i>';
+        dateTrashSlot.appendChild(dateTrashPh);
+        main.appendChild(dateTrashSlot);
+        shell.appendChild(main);
+    }
+
+    /**
+     * Custom dropdown (not native select) so the open menu uses app theme CSS.
+     * @param {Array<{value: string, label: string}>} options
+     * @param {string} selectedValue
+     * @param {string} placeholder
+     * @param {boolean} disabled
+     * @param {(s: string) => void} onPick
+     * @param {string} ariaLabel
+     * @param {string} [toggleId]
+     * @param {boolean} [suppressEmptyOptionLabel] when true, empty value shows a blank toggle (floating label only) — avoids overlapping “Month”/“Year” with optional date labels
+     * @returns {HTMLDivElement}
+     */
+    function createProfileStyledDropdown(
+        options,
+        selectedValue,
+        placeholder,
+        disabled,
+        onPick,
+        ariaLabel,
+        toggleId,
+        suppressEmptyOptionLabel,
+    ) {
+        const root = document.createElement("div");
+        root.className = "profile-dd";
+
+        let value = selectedValue || "";
+
+        const suppressEmpty = suppressEmptyOptionLabel === true;
+
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "profile-dd-toggle profile-month-field-select";
+        if (toggleId) {
+            toggle.id = toggleId;
+        }
+        toggle.disabled = disabled;
+        toggle.setAttribute("aria-haspopup", "listbox");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-label", ariaLabel);
+
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "profile-dd-toggle-text";
+
+        function labelFor(v) {
+            const hit = options.find(function (o) {
+                return o.value === v;
+            });
+            if (hit) {
+                if (suppressEmpty && hit.value === "") {
+                    return "\u00a0";
+                }
+                return hit.label;
+            }
+            return placeholder;
+        }
+
+        function syncToggleText() {
+            labelSpan.textContent = labelFor(value);
+        }
+        syncToggleText();
+
+        const chev = document.createElement("span");
+        chev.className = "profile-dd-chevron";
+        chev.setAttribute("aria-hidden", "true");
+        chev.innerHTML = '<i class="fas fa-chevron-down"></i>';
+
+        toggle.appendChild(labelSpan);
+        toggle.appendChild(chev);
+
+        const panel = document.createElement("div");
+        panel.className = "profile-dd-panel";
+        panel.hidden = true;
+        panel.setAttribute("role", "listbox");
+
+        let myCloser = null;
+
+        function closePanel() {
+            panel.hidden = true;
+            toggle.setAttribute("aria-expanded", "false");
+            root.classList.remove("profile-dd-open");
+            if (_profileMonthDdCloser === myCloser) {
+                _profileMonthDdCloser = null;
+            }
+            document.removeEventListener("click", onDocClick, true);
+            document.removeEventListener("keydown", onEsc, true);
+        }
+
+        function onDocClick(ev) {
+            const t = ev.target;
+            if (!(t instanceof Node) || !root.contains(t)) {
+                closePanel();
+            }
+        }
+
+        function onEsc(ev) {
+            if (ev.key === "Escape") {
+                closePanel();
+            }
+        }
+
+        function openPanel() {
+            closeOpenProfileMonthDropdown();
+            panel.hidden = false;
+            toggle.setAttribute("aria-expanded", "true");
+            root.classList.add("profile-dd-open");
+            myCloser = closePanel;
+            _profileMonthDdCloser = closePanel;
+            document.addEventListener("click", onDocClick, true);
+            document.addEventListener("keydown", onEsc, true);
+        }
+
+        toggle.addEventListener("click", function (ev) {
+            ev.stopPropagation();
+            if (disabled) return;
+            if (panel.hidden) {
+                openPanel();
+            } else {
+                closePanel();
+            }
+        });
+
+        function refreshSelectedMarks() {
+            panel.querySelectorAll('[role="option"]').forEach(function (el) {
+                const v = el.getAttribute("data-value") || "";
+                el.setAttribute("aria-selected", v === value ? "true" : "false");
+            });
+        }
+
+        options.forEach(function (opt) {
+            const optBtn = document.createElement("button");
+            optBtn.type = "button";
+            optBtn.className = "profile-dd-option";
+            optBtn.setAttribute("role", "option");
+            optBtn.setAttribute("data-value", opt.value);
+            optBtn.setAttribute("aria-selected", opt.value === value ? "true" : "false");
+
+            const inner = document.createElement("span");
+            inner.className = "profile-dd-option-inner";
+            const chk = document.createElement("span");
+            chk.className = "profile-dd-check";
+            chk.innerHTML = '<i class="fas fa-check" aria-hidden="true"></i>';
+            const txt = document.createElement("span");
+            txt.className = "profile-dd-option-label";
+            txt.textContent = opt.label;
+            inner.appendChild(chk);
+            inner.appendChild(txt);
+            optBtn.appendChild(inner);
+
+            optBtn.addEventListener("click", function (ev) {
+                ev.stopPropagation();
+                value = opt.value;
+                syncToggleText();
+                refreshSelectedMarks();
+                closePanel();
+                onPick(value);
+            });
+            panel.appendChild(optBtn);
+        });
+
+        root.appendChild(toggle);
+        root.appendChild(panel);
+        return root;
+    }
+
+    /**
+     * Append month + year cells (YYYY-MM) to a Bootstrap row — one flat row so all boxes share width.
+     * @param {HTMLDivElement} parentRow
+     * @param {string} cellColClass Bootstrap col classes for each cell (e.g. col-6 col-lg-2)
+     * @param {string} [firstCellExtraClass] optional extra class on the month column (e.g. pair divider)
+     * @param {string} initialValue
+     * @param {boolean} disabled
+     * @param {(s: string) => void} commit
+     * @param {string} idPrefix
+     * @param {'start'|'end'} whichHalf
+     * @param {{ endPresentLocked?: boolean, showLabelStar?: boolean, suppressEmptyToggleLabel?: boolean }} [opts]
+     *   end dates: `endPresentLocked` — show “Present” in both cells, disabled.
+     *   Default: same chrome as work experience (cyan `*` labels, `Month`/`Year` when empty). Set
+     *   `suppressEmptyToggleLabel: true` to hide empty value text (rare).
+     */
+    function appendProfileMonthYearPair(
+        parentRow,
+        cellColClass,
+        firstCellExtraClass,
+        initialValue,
+        disabled,
+        commit,
+        idPrefix,
+        whichHalf,
+        opts,
+    ) {
+        const o = opts || {};
+        const endPresentLocked =
+            !!(o.endPresentLocked && whichHalf === "end");
+        const showLabelStar = o.showLabelStar !== false;
+        const suppressEmptyToggleLabel = o.suppressEmptyToggleLabel === true;
+
+        const half = whichHalf === "end" ? "end" : "start";
+        const labelMonth = half === "end" ? "End month" : "Start month";
+        const labelYear = half === "end" ? "End year" : "Start year";
+        let emptyMonthOption = "Month";
+        let emptyYearOption = "Year";
+
+        let monthOptions;
+        let yearOptions;
+        let yearVal = "";
+        let monthVal = "";
+
+        if (endPresentLocked) {
+            monthOptions = [{ value: "present", label: "Present" }];
+            yearOptions = [{ value: "present", label: "Present" }];
+            monthVal = "present";
+            yearVal = "present";
+        } else {
+            const parsed = /^(\d{4})-(\d{2})$/.exec(String(initialValue || "").trim());
+            yearVal = parsed ? parsed[1] : "";
+            monthVal = parsed ? parsed[2] : "";
+            const MONTHS = [
+                ["01", "Jan"],
+                ["02", "Feb"],
+                ["03", "Mar"],
+                ["04", "Apr"],
+                ["05", "May"],
+                ["06", "Jun"],
+                ["07", "Jul"],
+                ["08", "Aug"],
+                ["09", "Sep"],
+                ["10", "Oct"],
+                ["11", "Nov"],
+                ["12", "Dec"],
+            ];
+            monthOptions = [{ value: "", label: emptyMonthOption }].concat(
+                MONTHS.map(function (pair) {
+                    return { value: pair[0], label: pair[1] };
+                }),
+            );
+
+            yearOptions = [{ value: "", label: emptyYearOption }];
+            const yNow = new Date().getFullYear();
+            for (let yy = yNow; yy >= 1950; yy--) {
+                yearOptions.push({ value: String(yy), label: String(yy) });
+            }
+        }
+
+        const star = showLabelStar ? " *" : "";
+
+        const ddDisabled = disabled || endPresentLocked;
+
+        function emit() {
+            if (endPresentLocked) {
+                commit("");
+                return;
+            }
+            if (yearVal && monthVal) {
+                commit(yearVal + "-" + monthVal);
+                return;
+            }
+            if (!yearVal && !monthVal) {
+                commit("");
+                return;
+            }
+            /* Partial month/year only: do not commit. Calling commit("") used to run renderEducation /
+             * renderWorkExperience on every pick and remount the pair before YYYY-MM was complete. */
+        }
+
+        const toggleIdM = idPrefix + "-month-toggle";
+        const toggleIdY = idPrefix + "-year-toggle";
+
+        const floatWrapM = document.createElement("div");
+        floatWrapM.className =
+            "form-floating profile-dd-floating mb-0" + (endPresentLocked ? " profile-dd-end-present-locked" : "");
+        const floatWrapY = document.createElement("div");
+        floatWrapY.className =
+            "form-floating profile-dd-floating mb-0" + (endPresentLocked ? " profile-dd-end-present-locked" : "");
+
+        function refreshFloatStates() {
+            if (endPresentLocked || monthVal) {
+                floatWrapM.classList.add("has-value");
+            } else {
+                floatWrapM.classList.remove("has-value");
+            }
+            if (endPresentLocked || yearVal) {
+                floatWrapY.classList.add("has-value");
+            } else {
+                floatWrapY.classList.remove("has-value");
+            }
+        }
+        refreshFloatStates();
+
+        const ddMonth = createProfileStyledDropdown(
+            monthOptions,
+            monthVal,
+            emptyMonthOption,
+            ddDisabled,
+            function (v) {
+                monthVal = v;
+                refreshFloatStates();
+                emit();
+            },
+            labelMonth + ", " + idPrefix,
+            toggleIdM,
+            suppressEmptyToggleLabel,
+        );
+
+        const ddYear = createProfileStyledDropdown(
+            yearOptions,
+            yearVal,
+            emptyYearOption,
+            ddDisabled,
+            function (v) {
+                yearVal = v;
+                refreshFloatStates();
+                emit();
+            },
+            labelYear + ", " + idPrefix,
+            toggleIdY,
+            suppressEmptyToggleLabel,
+        );
+
+        floatWrapM.appendChild(ddMonth);
+        const labM = document.createElement("label");
+        labM.htmlFor = toggleIdM;
+        labM.textContent = labelMonth + star;
+        floatWrapM.appendChild(labM);
+
+        floatWrapY.appendChild(ddYear);
+        const labY = document.createElement("label");
+        labY.htmlFor = toggleIdY;
+        labY.textContent = labelYear + star;
+        floatWrapY.appendChild(labY);
+
+        const colM = document.createElement("div");
+        colM.className = firstCellExtraClass ? cellColClass + " " + firstCellExtraClass : cellColClass;
+        colM.appendChild(floatWrapM);
+        const colY = document.createElement("div");
+        colY.className = cellColClass;
+        colY.appendChild(floatWrapY);
+        parentRow.appendChild(colM);
+        parentRow.appendChild(colY);
+    }
+
+    /**
+     * Hide the floating label while the job-description textarea is scrolled away from the top;
+     * show again when scrolled back to top. Label position/transform unchanged — visibility only.
+     * @param {HTMLDivElement} wrapper
+     * @param {HTMLTextAreaElement} textarea
+     */
+    function bindProfileExpJobDescScrollLabel(wrapper, textarea) {
+        function sync() {
+            const scrolled = textarea.scrollTop > 2;
+            wrapper.classList.toggle("profile-exp-job-desc-scrolled", scrolled);
+        }
+        textarea.addEventListener("scroll", sync, { passive: true });
+        sync();
+    }
+
     function renderWorkExperience() {
         const container = experienceContainer || document.getElementById("experience-container");
         container.innerHTML = "";
@@ -1951,13 +2554,15 @@
                 input.type = type;
                 input.className = "form-control";
                 input.placeholder = " ";
+                input.id = `ws-${index}-${field}`;
                 input.value = initialValue;
                 if (disabled) input.disabled = true;
-                if (type !== "month") input.required = true;
+                input.required = true;
                 input.addEventListener("change", function () {
                     updateWorkExperience(index, field, this.value);
                 });
                 const label = document.createElement("label");
+                label.htmlFor = input.id;
                 label.textContent = labelText;
                 wrapper.appendChild(input);
                 wrapper.appendChild(label);
@@ -1966,7 +2571,7 @@
 
             // Row 1: company | job title | trash button
             const row1 = document.createElement("div");
-            row1.className = "row align-items-center";
+            row1.className = "row align-items-center profile-exp-company-job-row";
             const col1 = document.createElement("div"); col1.className = "col";
             col1.appendChild(makeFloatingInput("text", exp.company, "Company Name *", "company"));
             const col2 = document.createElement("div"); col2.className = "col";
@@ -1982,33 +2587,74 @@
             row1.appendChild(col1); row1.appendChild(col2); row1.appendChild(colTrash);
             div.appendChild(row1);
 
-            const row2 = document.createElement("div");
-            row2.className = "row";
-            const colStart = document.createElement("div"); colStart.className = "col-md-4";
-            colStart.appendChild(makeFloatingInput("month", exp.start_date, "Start Date *", "start_date"));
-            const colEnd = document.createElement("div"); colEnd.className = "col-md-4";
-            const endInput = makeFloatingInput("month", exp.end_date || "", "End Date", "end_date", !!exp.is_current);
-            colEnd.appendChild(endInput);
-            const colCurrent = document.createElement("div"); colCurrent.className = "col-md-4";
-            if (index === 0) {
-                const checkWrapper = document.createElement("div"); checkWrapper.className = "form-check mt-3";
+            const DATE_CELL = "profile-exp-date-cell";
+
+            const shell = document.createElement("div");
+            shell.className = "profile-exp-dates-shell mb-3";
+
+            const quartet = document.createElement("div");
+            quartet.className =
+                "profile-exp-date-quartet" + (exp.is_current ? " profile-exp-date-quartet--start-only" : "");
+
+            appendProfileMonthYearPair(
+                quartet,
+                DATE_CELL,
+                "",
+                exp.start_date,
+                false,
+                function (ym) {
+                    updateWorkExperience(index, "start_date", ym);
+                },
+                `ws-${index}-start_date`,
+                "start",
+            );
+
+            if (!exp.is_current) {
+                appendProfileMonthYearPair(
+                    quartet,
+                    DATE_CELL,
+                    "",
+                    exp.end_date || "",
+                    false,
+                    function (ym) {
+                        updateWorkExperience(index, "end_date", ym);
+                    },
+                    `ws-${index}-end_date`,
+                    "end",
+                );
+            }
+
+            appendProfileDatesMainWithTrashSlot(shell, quartet);
+
+            const showWorkCurrentToggle = !String(exp.end_date || "").trim();
+            if (showWorkCurrentToggle) {
+                const checkWrap = document.createElement("div");
+                checkWrap.className = "profile-exp-date-check-wrap";
+                const checkWrapper = document.createElement("div");
+                checkWrapper.className = "form-check mb-0 profile-exp-current-toggle";
+                const wbId = `work-exp-is-current-${index}`;
                 const checkbox = document.createElement("input");
-                checkbox.type = "checkbox"; checkbox.className = "form-check-input"; checkbox.checked = !!exp.is_current;
+                checkbox.type = "checkbox";
+                checkbox.className = "form-check-input";
+                checkbox.id = wbId;
+                checkbox.checked = !!exp.is_current;
                 checkbox.addEventListener("change", function () {
                     updateWorkExperience(index, "is_current", this.checked);
                 });
-                const checkLabel = document.createElement("label"); checkLabel.className = "form-check-label";
+                const checkLabel = document.createElement("label");
+                checkLabel.className = "form-check-label";
+                checkLabel.setAttribute("for", wbId);
                 checkLabel.textContent = "Currently work here";
-                checkWrapper.appendChild(checkbox); checkWrapper.appendChild(checkLabel);
-                colCurrent.appendChild(checkWrapper);
-            } else if (exp.is_current) {
-                workExperience[index]["is_current"] = false;
-                workExperience[index]["end_date"] = workExperience[index]["end_date"] || "";
+                checkWrapper.appendChild(checkbox);
+                checkWrapper.appendChild(checkLabel);
+                checkWrap.appendChild(checkWrapper);
+                shell.appendChild(checkWrap);
             }
-            row2.appendChild(colStart); row2.appendChild(colEnd); row2.appendChild(colCurrent);
-            div.appendChild(row2);
 
-            const descWrapper = document.createElement("div"); descWrapper.className = "form-floating";
+            div.appendChild(shell);
+
+            const descWrapper = document.createElement("div");
+            descWrapper.className = "form-floating profile-exp-job-desc-float";
             const textarea = document.createElement("textarea");
             textarea.className = "form-control"; textarea.style.height = "150px"; textarea.style.minHeight = "150px";
             textarea.placeholder = " ";
@@ -2018,6 +2664,7 @@
             });
             const descLabel = document.createElement("label"); descLabel.textContent = "Job Description";
             descWrapper.appendChild(textarea); descWrapper.appendChild(descLabel);
+            bindProfileExpJobDescScrollLabel(descWrapper, textarea);
             div.appendChild(descWrapper);
 
             container.appendChild(div);
@@ -2027,12 +2674,230 @@
     function updateWorkExperience(index, field, value) {
         workExperience[index][field] = value;
 
+        if (field === "end_date") {
+            if (String(value).trim()) {
+                workExperience[index]["is_current"] = false;
+            }
+            renderWorkExperience();
+            return;
+        }
+
         if (field === "is_current") {
             if (value) {
                 workExperience[index]["end_date"] = "";
             }
-            renderWorkExperience(); // Re-render to update disabled state
+            renderWorkExperience();
         }
+    }
+
+    // =============================================================================
+    // Education management (profile setup Step 3)
+    // =============================================================================
+
+    function addEducation() {
+        educationHistory.push({
+            institution: "",
+            degree: "",
+            field_of_study: "",
+            start_date: "",
+            end_date: "",
+            is_current: false,
+        });
+        renderEducation();
+    }
+
+    function removeEducation(index) {
+        educationHistory.splice(index, 1);
+        renderEducation();
+    }
+
+    /**
+     * @param {number} index
+     * @param {string} field
+     * @param {string|boolean} value
+     */
+    function updateEducation(index, field, value) {
+        if (!educationHistory[index]) return;
+        educationHistory[index][field] = value;
+        if (field === "end_date") {
+            if (String(value).trim()) {
+                educationHistory[index]["is_current"] = false;
+            }
+            renderEducation();
+            return;
+        }
+        if (field === "is_current") {
+            if (value) {
+                educationHistory[index]["end_date"] = "";
+            }
+            renderEducation();
+        }
+    }
+
+    function renderEducation() {
+        const container = educationContainer || document.getElementById("education-container");
+        if (!container) return;
+        container.innerHTML = "";
+
+        educationHistory.forEach((edu, index) => {
+            const div = document.createElement("div");
+            div.className = "experience-item";
+
+            /**
+             * @param {string} type
+             * @param {string} initialValue
+             * @param {string} labelText
+             * @param {string} field
+             * @param {boolean} [disabled]
+             * @param {boolean} [required]
+             */
+            function makeFloatingInput(type, initialValue, labelText, field, disabled = false, required = true) {
+                const wrapper = document.createElement("div");
+                wrapper.className = "form-floating mb-3";
+                const input = document.createElement("input");
+                input.type = type;
+                input.className = "form-control";
+                input.placeholder = " ";
+                input.id = `ed-${index}-${field}`;
+                input.value = initialValue;
+                if (disabled) input.disabled = true;
+                input.required = required;
+                input.addEventListener("change", function () {
+                    updateEducation(index, field, this.value);
+                });
+                const label = document.createElement("label");
+                label.htmlFor = input.id;
+                label.textContent = labelText;
+                wrapper.appendChild(input);
+                wrapper.appendChild(label);
+                return wrapper;
+            }
+
+            const row1 = document.createElement("div");
+            row1.className = "row align-items-center profile-exp-company-job-row";
+            const col1 = document.createElement("div");
+            col1.className = "col";
+            col1.appendChild(makeFloatingInput("text", edu.institution, "Institution *", "institution"));
+            const col2 = document.createElement("div");
+            col2.className = "col";
+            col2.appendChild(makeFloatingInput("text", edu.degree, "Degree *", "degree"));
+            const colTrash = document.createElement("div");
+            colTrash.className = "col-auto mb-3";
+            const removeBtn = document.createElement("button");
+            removeBtn.type = "button";
+            removeBtn.className = "remove-experience";
+            removeBtn.setAttribute("aria-label", `Remove education ${index + 1}`);
+            removeBtn.innerHTML = '<i class="fas fa-trash"></i>';
+            removeBtn.addEventListener("click", () => removeEducation(index));
+            colTrash.appendChild(removeBtn);
+            row1.appendChild(col1);
+            row1.appendChild(col2);
+            row1.appendChild(colTrash);
+            div.appendChild(row1);
+
+            const fieldRow = document.createElement("div");
+            fieldRow.className = "row align-items-center profile-exp-company-job-row";
+            const fieldCol = document.createElement("div");
+            fieldCol.className = "col profile-exp-education-field-col";
+            const fieldWrap = document.createElement("div");
+            fieldWrap.className = "form-floating mb-3 w-100";
+            const fieldInput = document.createElement("input");
+            fieldInput.id = `ed-${index}-field_of_study`;
+            fieldInput.className = "form-control";
+            fieldInput.placeholder = " ";
+            fieldInput.value = edu.field_of_study || "";
+            fieldInput.addEventListener("change", function () {
+                updateEducation(index, "field_of_study", this.value);
+            });
+            const fieldLabel = document.createElement("label");
+            fieldLabel.textContent = "Field of study *";
+            fieldLabel.htmlFor = fieldInput.id;
+            fieldInput.required = true;
+            fieldWrap.appendChild(fieldInput);
+            fieldWrap.appendChild(fieldLabel);
+            fieldCol.appendChild(fieldWrap);
+            const fieldTrashSlot = document.createElement("div");
+            fieldTrashSlot.className = "col-auto mb-3 d-flex align-items-center justify-content-center";
+            const trashSlotPh = document.createElement("button");
+            trashSlotPh.type = "button";
+            trashSlotPh.className = "remove-experience profile-exp-trash-slot-placeholder";
+            trashSlotPh.tabIndex = -1;
+            trashSlotPh.disabled = true;
+            trashSlotPh.setAttribute("aria-hidden", "true");
+            trashSlotPh.innerHTML = '<i class="fas fa-trash"></i>';
+            fieldTrashSlot.appendChild(trashSlotPh);
+            fieldRow.appendChild(fieldCol);
+            fieldRow.appendChild(fieldTrashSlot);
+            div.appendChild(fieldRow);
+
+            const DATE_CELL = "profile-exp-date-cell";
+
+            const shell = document.createElement("div");
+            shell.className = "profile-exp-dates-shell mb-3";
+
+            const quartet = document.createElement("div");
+            quartet.className =
+                "profile-exp-date-quartet" + (edu.is_current ? " profile-exp-date-quartet--start-only" : "");
+
+            appendProfileMonthYearPair(
+                quartet,
+                DATE_CELL,
+                "",
+                edu.start_date || "",
+                false,
+                function (ym) {
+                    updateEducation(index, "start_date", ym);
+                },
+                `ed-${index}-start_date`,
+                "start",
+            );
+
+            if (!edu.is_current) {
+                appendProfileMonthYearPair(
+                    quartet,
+                    DATE_CELL,
+                    "",
+                    edu.end_date || "",
+                    false,
+                    function (ym) {
+                        updateEducation(index, "end_date", ym);
+                    },
+                    `ed-${index}-end_date`,
+                    "end",
+                );
+            }
+
+            appendProfileDatesMainWithTrashSlot(shell, quartet);
+
+            const showEduCurrentToggle = !String(edu.end_date || "").trim();
+            if (showEduCurrentToggle) {
+                const checkWrap = document.createElement("div");
+                checkWrap.className = "profile-exp-date-check-wrap";
+                const checkWrapper = document.createElement("div");
+                checkWrapper.className = "form-check mb-0 profile-exp-current-toggle";
+                const cbId = `education-is-current-${index}`;
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.className = "form-check-input";
+                checkbox.id = cbId;
+                checkbox.checked = !!edu.is_current;
+                checkbox.addEventListener("change", function () {
+                    updateEducation(index, "is_current", this.checked);
+                });
+                const checkLabel = document.createElement("label");
+                checkLabel.className = "form-check-label";
+                checkLabel.setAttribute("for", cbId);
+                checkLabel.textContent = "Currently enrolled";
+                checkWrapper.appendChild(checkbox);
+                checkWrapper.appendChild(checkLabel);
+                checkWrap.appendChild(checkWrapper);
+                shell.appendChild(checkWrap);
+            }
+
+            div.appendChild(shell);
+
+            container.appendChild(div);
+        });
     }
 
     // File upload functionality removed - no longer needed in 4-step profile setup
@@ -2055,10 +2920,14 @@
             },
             {
                 name: "Work Experience",
-                completed: workExperience.length > 0,
+                completed: validateWorkExperience(),
             },
-            { 
-                name: "Skills", 
+            {
+                name: "Education",
+                completed: validateEducation(),
+            },
+            {
+                name: "Skills",
                 completed: skills.length >= VALIDATION_RULES.MIN_SKILLS,
             },
             {

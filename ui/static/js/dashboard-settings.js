@@ -213,8 +213,21 @@
     // INIT
     // =============================================================================
 
-    document.addEventListener('DOMContentLoaded', function () {
-        checkAuthentication();
+    /** @returns {boolean} */
+    function requireLogin() {
+        // @ts-ignore
+        const authenticated = window.app ? window.app.isAuthenticated() : !!getAuthToken();
+        if (!authenticated) {
+            window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login';
+            return false;
+        }
+        return true;
+    }
+
+    document.addEventListener('DOMContentLoaded', async function () {
+        if (!requireLogin()) return;
+        if (typeof window.syncProfileCompletionFromApi !== 'function' || !(await window.syncProfileCompletionFromApi())) return;
+
         loadApiKeyStatus();
         loadGoogleAccountStatus();
         loadWorkflowPreferences();
@@ -324,13 +337,6 @@
         return (window.app && typeof window.app.getAuthToken === 'function')
             ? window.app.getAuthToken()
             : (localStorage.getItem('access_token') || localStorage.getItem('authToken'));
-    }
-
-    function checkAuthentication() {
-        // @ts-ignore
-        const authenticated = window.app ? window.app.isAuthenticated() : !!getAuthToken();
-        if (!authenticated) { window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login'; return; }
-        if (localStorage.getItem('profile_completed') !== 'true') { window.location.href = '/profile/setup'; }
     }
 
     // =============================================================================

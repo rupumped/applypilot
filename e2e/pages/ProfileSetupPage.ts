@@ -35,12 +35,17 @@ export class ProfileSetupPage extends BasePage {
   readonly currentJobCheckbox: Locator;
   readonly jobDescriptionInput: Locator;
   
-  // Step 3: Skills
+  // Step 3: Education (same IDs as setup.html)
+  readonly educationContainer: Locator;
+  readonly addEducationButton: Locator;
+  readonly noEducationCheckbox: Locator;
+
+  // Step 4: Skills
   readonly skillsInput: Locator;
   readonly addSkillButton: Locator;
   readonly skillTag: Locator;
   
-  // Step 4: Career Preferences
+  // Step 5: Career Preferences
   readonly minSalaryInput: Locator;
   readonly maxSalaryInput: Locator;
   readonly jobTypeCheckboxes: Locator;
@@ -80,13 +85,18 @@ export class ProfileSetupPage extends BasePage {
     this.endDateInput = page.locator('input[name="end_date"], #endDate');
     this.currentJobCheckbox = page.locator('input[type="checkbox"][name*="current"], #currentJob');
     this.jobDescriptionInput = page.locator('textarea[name="description"], #jobDescription');
+
+    // Step 3 — Education
+    this.educationContainer = page.locator('#education-container');
+    this.addEducationButton = page.locator('#add-education-btn');
+    this.noEducationCheckbox = page.locator('#no-education');
     
-    // Step 3
+    // Step 4 — Skills
     this.skillsInput = page.locator('#skills-input');
     this.addSkillButton = page.locator('#add-skill-btn, button:has-text("Add")');
     this.skillTag = page.locator('.skill-tag, .badge');
     
-    // Step 4 - Career Preferences
+    // Step 5 — Career Preferences
     this.minSalaryInput = page.locator('#min-salary');
     this.maxSalaryInput = page.locator('#max-salary');
     this.jobTypeCheckboxes = page.locator('input[type="checkbox"]:near(:text("Full-time"))');
@@ -178,10 +188,10 @@ export class ProfileSetupPage extends BasePage {
   }
   
   /**
-   * Add skills (Step 3)
+   * Add skills (Step 4 — Skills tab in setup.html)
    */
   async addSkills(skills: string[]) {
-    // Wait for skills input to be visible (step 3 is active)
+    // Wait for skills input to be visible (step 4 is active)
     await expect(this.skillsInput).toBeVisible({ timeout: 10000 });
     
     for (const skill of skills) {
@@ -194,7 +204,7 @@ export class ProfileSetupPage extends BasePage {
   }
   
   /**
-   * Fill career preferences (Step 4)
+   * Fill career preferences (Step 5)
    */
   async fillCareerPreferences(data: {
     minSalary?: number;
@@ -300,13 +310,20 @@ export class ProfileSetupPage extends BasePage {
     }
     await this.nextStep();
     
-    // Step 3: Skills
+    // Step 3: Education (check "no formal education" for minimal path)
     await this.waitForStep(3).catch(() => {});
+    if (await this.noEducationCheckbox.isVisible().catch(() => false)) {
+      await this.noEducationCheckbox.check();
+    }
+    await this.nextStep();
+    
+    // Step 4: Skills
+    await this.waitForStep(4).catch(() => {});
     await this.addSkills(data.skills);
     await this.nextStep();
     
-    // Step 4: Career Preferences
-    await this.waitForStep(4).catch(() => {});
+    // Step 5: Career Preferences
+    await this.waitForStep(5).catch(() => {});
     await this.fillCareerPreferences({
       minSalary: 80000,
       maxSalary: 150000,

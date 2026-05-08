@@ -95,6 +95,9 @@ Both commands do the same thing on first run:
 - Copies `.env.local.example` → `.env` and fills in strong random secrets automatically
 - Builds the Docker image (takes ~2 min, only on the first run)
 - Starts PostgreSQL, Redis, and the app at **http://localhost:8000**
+- Applies database migrations automatically when the app container starts (then starts the web server)
+
+**After `git pull`:** Run **`make start`** / **`just start`** again — it rebuilds the app Docker image when needed (including the frontend bundle inside the image), then migrations run automatically when the app container starts.
 
 ```bash
 make start-d      / just start-d       # run in background
@@ -122,6 +125,8 @@ make start-local
 - Installs PostgreSQL 17 and Redis via Homebrew (first run only)
 - Creates the database and user, runs migrations
 - Starts the app at **http://localhost:8000**
+
+**After `git pull`:** Run **`make start-local`** again — it rebuilds the frontend, applies migrations, and starts the app.
 
 ```bash
 make start-local    # start everything
@@ -182,7 +187,9 @@ make migrate  / just migrate   # creates all database tables
 make dev      / just dev       # start the app at http://localhost:8000
 ```
 
-From then on, as long as PostgreSQL and Redis are running, `make dev` / `just dev` is all you need.
+**After `git pull`:** Run **`make migrate`** / **`just migrate`**, then **`make dev`** / **`just dev`** (`make dev` rebuilds the frontend before starting uvicorn). If **`requirements.txt`** or **`ui/package.json`** changed, run **`make setup`** / **`just setup`** first, then migrate and dev again.
+
+From then on, as long as PostgreSQL and Redis are running and you are not pulling new upstream changes, `make dev` / `just dev` is all you need.
 
 ---
 

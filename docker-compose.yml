@@ -5,8 +5,9 @@
 #
 # Quick start:
 #   1. make start                       (auto-generates .env with secrets, then runs compose)
-#   2. Open http://localhost:8000
-#   3. Add your Gemini API key in Settings → AI Setup
+#   2. The app container applies DB migrations, then starts uvicorn (docker-entrypoint.sh).
+#   3. Open http://localhost:8000
+#   4. Add your Gemini API key in Settings → AI Setup
 #
 # The DATABASE_URL and REDIS_URL in your .env are automatically overridden
 # to point at the postgres and redis containers below.

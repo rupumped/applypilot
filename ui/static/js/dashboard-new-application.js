@@ -38,8 +38,29 @@
     let uploadedFile = /** @type {File|null} */ (null);
     let _submitting = false;
 
-    document.addEventListener('DOMContentLoaded', function () {
-        checkAuthentication();
+    function getAuthToken() {
+        // @ts-ignore
+        if (window.app && typeof window.app.getAuthToken === 'function') return window.app.getAuthToken();
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken  = urlParams.get('token');
+        if (urlToken) return urlToken;
+        return localStorage.getItem('access_token') || localStorage.getItem('authToken');
+    }
+
+    /** @returns {boolean} */
+    function requireLogin() {
+        // @ts-ignore
+        const authenticated = window.app ? window.app.isAuthenticated() : !!getAuthToken();
+        if (!authenticated) {
+            window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login';
+            return false;
+        }
+        return true;
+    }
+
+    document.addEventListener('DOMContentLoaded', async function () {
+        if (!requireLogin()) return;
+        if (typeof window.syncProfileCompletionFromApi !== 'function' || !(await window.syncProfileCompletionFromApi())) return;
 
         // Method tab switching (replaces inline onclick="switchTab('...')")
         document.querySelectorAll('.method-tab[data-tab]').forEach(function (btn) {
@@ -89,22 +110,6 @@
             if (actionName === 'process-application') processApplication();
         });
     });
-
-    function getAuthToken() {
-        // @ts-ignore
-        if (window.app && typeof window.app.getAuthToken === 'function') return window.app.getAuthToken();
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlToken  = urlParams.get('token');
-        if (urlToken) return urlToken;
-        return localStorage.getItem('access_token') || localStorage.getItem('authToken');
-    }
-
-    function checkAuthentication() {
-        // @ts-ignore
-        const authenticated = window.app ? window.app.isAuthenticated() : !!getAuthToken();
-        if (!authenticated) { window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login'; return; }
-        if (localStorage.getItem('profile_completed') !== 'true') { window.location.href = '/profile/setup'; }
-    }
 
     /** @param {string} tabName */
     function switchTab(tabName) {

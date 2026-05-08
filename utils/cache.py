@@ -581,6 +581,55 @@ async def invalidate_user_profile(user_id: str) -> bool:
     return await cache_delete(key)
 
 
+def invalidate_all_user_profile_caches_sync() -> int:
+    """Clear all cached ``GET /profile`` payloads from Redis (synchronous).
+
+    Call from Alembic ``upgrade()`` after SQL backfills on ``user_profiles`` that
+    bypass the profile API (which normally calls :func:`invalidate_user_profile`).
+    Best-effort: logs and returns 0 if Redis is unavailable — does not raise.
+
+    Returns:
+        Number of keys deleted.
+    """
+    try:
+        import redis as redis_sync
+    except ImportError:
+        logger.warning(
+            "redis package unavailable — skipping user_profile cache invalidation"
+        )
+        return 0
+
+    try:
+        settings = get_settings()
+        pattern = f"{settings.cache_version}:{CACHE_PREFIX_USER_PROFILE}:*"
+        deleted = 0
+        with redis_sync.Redis.from_url(
+            settings.redis_url,
+            decode_responses=True,
+        ) as client:
+            batch: List[str] = []
+            for key in client.scan_iter(match=pattern, count=500):
+                batch.append(key)
+                if len(batch) >= 500:
+                    deleted += int(client.delete(*batch))
+                    batch.clear()
+            if batch:
+                deleted += int(client.delete(*batch))
+        if deleted:
+            logger.info(
+                "Invalidated %s cached user_profile keys (migration / bulk backfill)",
+                deleted,
+            )
+        return deleted
+    except Exception as e:
+        logger.warning(
+            "user_profile cache invalidation skipped: %s",
+            e,
+            exc_info=True,
+        )
+        return 0
+
+
 async def invalidate_user_llm_cache(user_id: str) -> int:
     """Delete all per-user LLM response cache entries.
 

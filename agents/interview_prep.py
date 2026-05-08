@@ -523,6 +523,24 @@ class InterviewPrepAgent:
 - Description: {description[:500]}
 """)
         
+        edu_rows = profile.get("education", []) or []
+        if edu_rows:
+            sections.append("\n### EDUCATION")
+            for i, edu in enumerate(edu_rows[:4], 1):
+                inst = edu.get("institution", "N/A")
+                deg = edu.get("degree", "N/A")
+                fos = edu.get("field_of_study") or ""
+                start = edu.get("start_date", "N/A")
+                end = (
+                    "Present"
+                    if edu.get("is_current")
+                    else (edu.get("end_date") or "N/A")
+                )
+                line = f"**Education {i}: {deg} — {inst}** ({start} to {end})"
+                if fos:
+                    line += f"\n- Field: {fos}"
+                sections.append(line)
+        
         return ''.join(sections)
 
     def _format_matching_insights(self, matching: Dict[str, Any]) -> str:

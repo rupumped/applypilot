@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional, List
 from enum import Enum
 
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
-from pydantic import BaseModel, Field, validator, field_validator, ValidationInfo
+from pydantic import BaseModel, Field, validator, field_validator, ValidationInfo, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete as sa_delete, func
 from sqlalchemy.exc import IntegrityError
@@ -92,6 +92,8 @@ MAX_TITLE_LENGTH: int = 100
 MAX_YEARS_EXPERIENCE: int = 70
 MAX_DESCRIPTION_LENGTH: int = 4000
 MAX_WORK_EXPERIENCE_ITEMS: int = 10
+MAX_EDUCATION_ITEMS: int = 10
+MAX_FIELD_OF_STUDY_LENGTH: int = 200
 MAX_SKILLS_ITEMS: int = 50
 MAX_COMPANY_SIZE_ITEMS: int = 5
 MAX_JOB_TYPE_ITEMS: int = 5
@@ -451,6 +453,134 @@ class WorkExperienceRequest(BaseModel):
             )
 
         return v
+
+
+class EducationItem(BaseModel):
+    """Single education entry (school / degree / dates)."""
+
+    institution: str = Field(
+        ...,
+        min_length=MIN_LENGTH,
+        max_length=MAX_COMPANY_LENGTH,
+        description="School or institution name",
+    )
+    degree: str = Field(
+        ...,
+        min_length=MIN_LENGTH,
+        max_length=MAX_TITLE_LENGTH,
+        description="Degree or qualification",
+    )
+    field_of_study: str = Field(
+        ...,
+        min_length=MIN_LENGTH,
+        max_length=MAX_FIELD_OF_STUDY_LENGTH,
+        description="Major or field of study (required)",
+    )
+    start_date: str = Field(
+        ...,
+        min_length=7,
+        max_length=7,
+        description="Start date in YYYY-MM format (required)",
+    )
+    end_date: Optional[str] = Field(
+        None,
+        max_length=7,
+        description="End / graduation date in YYYY-MM format",
+    )
+    is_current: bool = Field(False, description="Currently enrolled")
+
+    @validator("institution")
+    def validate_institution(cls, v: str) -> str:
+        return _validate_professional_name(v, "Institution")
+
+    @validator("degree")
+    def validate_degree(cls, v: str) -> str:
+        return _validate_professional_name(v, "Degree")
+
+    @validator("field_of_study")
+    def validate_field_of_study(cls, v: str) -> str:
+        ft = _validate_professional_name(v, "Field of study")
+        if len(ft) > MAX_FIELD_OF_STUDY_LENGTH:
+            raise ValueError(f"Field of study cannot exceed {MAX_FIELD_OF_STUDY_LENGTH} characters")
+        return ft
+
+    @validator("start_date")
+    def validate_edu_start_date(cls, v: str) -> str:
+        if not v or not str(v).strip():
+            raise ValueError("Start date is required")
+        start_date = str(v).strip()
+        if not re.match(r"^\d{4}-\d{2}$", start_date):
+            raise ValueError("Start date must be in YYYY-MM format (e.g., 2023-01)")
+        try:
+            year, month = map(int, start_date.split("-"))
+        except ValueError:
+            raise ValueError("Start date must be in YYYY-MM format (e.g., 2023-01)")
+        if not (1900 <= year <= 2100):
+            raise ValueError("Start date year must be between 1900 and 2100")
+        if not (1 <= month <= 12):
+            raise ValueError("Start date month must be between 01 and 12")
+        parsed_date: datetime = datetime.strptime(start_date, "%Y-%m").replace(tzinfo=timezone.utc)
+        current_date: datetime = datetime.now(timezone.utc)
+        if parsed_date > current_date:
+            raise ValueError("Start date cannot be in the future")
+        return start_date
+
+    @validator("end_date")
+    def validate_edu_end_date(cls, v: Optional[str], values: dict) -> Optional[str]:
+        if not v:
+            return None
+        end_date = v.strip()
+        try:
+            parsed_end_date = datetime.strptime(end_date, "%Y-%m")
+        except ValueError:
+            raise ValueError("End date must be in YYYY-MM format")
+        current_date = datetime.now(timezone.utc)
+        max_future_date = datetime(current_date.year + 1, 12, 31, tzinfo=timezone.utc)
+        parsed_end_date = parsed_end_date.replace(tzinfo=timezone.utc)
+        if parsed_end_date > max_future_date:
+            raise ValueError("End date cannot be more than 1 year in the future")
+        start_raw = values.get("start_date")
+        if start_raw and isinstance(start_raw, str):
+            try:
+                parsed_start = datetime.strptime(start_raw.strip(), "%Y-%m").replace(
+                    tzinfo=timezone.utc
+                )
+                if parsed_end_date <= parsed_start:
+                    raise ValueError("End date must be after start date")
+            except ValueError as ex:
+                if "End date must be after" in str(ex):
+                    raise
+                pass
+        return end_date
+
+    @validator("is_current")
+    def validate_edu_is_current(cls, v: bool, values: dict) -> bool:
+        if v:
+            end_date = values.get("end_date")
+            if end_date and str(end_date).strip():
+                raise ValueError("If currently enrolled, leave end date empty")
+        return v
+
+    @model_validator(mode="after")
+    def validate_education_end_when_completed(self) -> "EducationItem":
+        """Require graduation/end date unless the user marks Currently enrolled."""
+        if not self.is_current:
+            ed = self.end_date
+            if ed is None or (isinstance(ed, str) and not str(ed).strip()):
+                raise ValueError(
+                    "End date is required unless you mark Currently enrolled"
+                )
+        return self
+
+
+class EducationRequest(BaseModel):
+    """Education step request model."""
+
+    education: List[EducationItem] = Field(
+        default_factory=list,
+        max_items=MAX_EDUCATION_ITEMS,
+        description="Education history entries",
+    )
 
 
 class SkillsQualificationsRequest(BaseModel):
@@ -932,13 +1062,68 @@ async def update_work_experience(
         raise internal_error("Failed to update work experience")
 
 
+@router.put("/education")
+async def update_education(
+    edu_data: EducationRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
+):
+    """Update education history (Step 3 of profile setup)."""
+    try:
+        user_id = get_user_id_from_token(current_user)
+        education = [row.model_dump() for row in edu_data.education]
+
+        result = await db.execute(
+            select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+        )
+        user_profile = result.scalar_one_or_none()
+
+        if user_profile:
+            user_profile.education = education
+            flag_modified(user_profile, "education")
+            user_profile.updated_at = datetime.now(timezone.utc)
+        else:
+            user_profile = UserProfileModel(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                education=education,
+            )
+            db.add(user_profile)
+
+        await db.commit()
+
+        await invalidate_user_profile(str(user_id))
+
+        logger.info(
+            f"Updated education for user: {mask_email(current_user['email'])} — {len(education)} entries"
+        )
+
+        return {
+            "message": "Education updated successfully",
+            "summary": {
+                "total_entries": len(education),
+                "has_education": len(education) > 0,
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(
+            f"Failed to update education for user {mask_email(current_user['email'])}: {e}",
+            exc_info=True,
+        )
+        raise internal_error("Failed to update education")
+
+
 @router.put("/skills-qualifications")
 async def update_skills_qualifications(
     skills_data: SkillsQualificationsRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_database),
 ):
-    """Update skills and qualifications (Step 3 of profile setup)."""
+    """Update skills and qualifications (Step 4 of profile setup)."""
     try:
         user_id = get_user_id_from_token(current_user)
 
@@ -983,7 +1168,7 @@ async def update_career_preferences(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_database),
 ):
-    """Update career preferences (Step 4 of profile setup)."""
+    """Update career preferences (Step 5 of profile setup)."""
     try:
         user_id = get_user_id_from_token(current_user)
 
@@ -1072,15 +1257,26 @@ async def complete_profile(
         # Check all required sections are complete
         basic_complete = _check_basic_info_completion(user_profile)
         work_complete = _check_work_experience_completion(user_profile)
+        education_complete = _check_education_completion(user_profile)
         skills_complete = _check_skills_qualifications_completion(user_profile)
         preferences_complete = _check_career_preferences_completion(user_profile)
 
-        if not all([basic_complete, work_complete, skills_complete, preferences_complete]):
+        if not all(
+            [
+                basic_complete,
+                work_complete,
+                education_complete,
+                skills_complete,
+                preferences_complete,
+            ]
+        ):
             missing = []
             if not basic_complete:
                 missing.append("Basic Info")
             if not work_complete:
                 missing.append("Work Experience")
+            if not education_complete:
+                missing.append("Education")
             if not skills_complete:
                 missing.append("Skills")
             if not preferences_complete:
@@ -1359,6 +1555,7 @@ async def get_profile_status(
         steps: Dict[str, bool] = {
             "basic_info": _check_basic_info_completion(user_profile),
             "work_experience": _check_work_experience_completion(user_profile),
+            "education": _check_education_completion(user_profile),
             "skills_qualifications": _check_skills_qualifications_completion(user_profile),
             "career_preferences": _check_career_preferences_completion(user_profile),
         }
@@ -1394,16 +1591,18 @@ async def get_profile_completion_status(
     """Get profile completion status for a user."""
     basic_info_complete = _check_basic_info_completion(user_profile)
     work_experience_complete = _check_work_experience_completion(user_profile)
+    education_complete = _check_education_completion(user_profile)
     skills_qualifications_complete = _check_skills_qualifications_completion(user_profile)
     career_preferences_complete = _check_career_preferences_completion(user_profile)
 
     completed_sections = sum([
         1 if basic_info_complete else 0,
         1 if work_experience_complete else 0,
+        1 if education_complete else 0,
         1 if skills_qualifications_complete else 0,
         1 if career_preferences_complete else 0,
     ])
-    total_sections = 4
+    total_sections = 5
     completion_percentage = int((completed_sections / total_sections) * 100)
 
     # Update user document with completion status
@@ -1421,6 +1620,7 @@ async def get_profile_completion_status(
     return {
         "basic_info": basic_info_complete,
         "work_experience": work_experience_complete,
+        "education": education_complete,
         "skills_qualifications": skills_qualifications_complete,
         "career_preferences": career_preferences_complete,
         "completion_percentage": completion_percentage,
@@ -1454,6 +1654,17 @@ def _check_work_experience_completion(user_profile: Optional[UserProfileModel]) 
     # NULL = step never saved. Empty JSON list [] = user saved "no relevant experience yet"
     # (distinct from NULL in PostgreSQL JSONB).
     if work_experience is None:
+        return False
+    return True
+
+
+def _check_education_completion(user_profile: Optional[UserProfileModel]) -> bool:
+    """Check if education step is completed (saved rows or explicit empty list)."""
+    if not user_profile:
+        return False
+
+    education = user_profile.education
+    if education is None:
         return False
     return True
 

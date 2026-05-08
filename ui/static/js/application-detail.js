@@ -132,8 +132,9 @@
     }
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-        checkAuth();
+    document.addEventListener('DOMContentLoaded', async () => {
+        if (!checkAuth()) return;
+        if (typeof window.syncProfileCompletionFromApi !== 'function' || !(await window.syncProfileCompletionFromApi())) return;
 
         // Get session ID from URL
         const pathParts = window.location.pathname.split('/');
@@ -219,10 +220,15 @@
         document.getElementById('pane-interview')?.addEventListener('click', handleDynamicAction);
     });
 
+    /** @returns {boolean} */
     function checkAuth() {
         // @ts-ignore
         const authenticated = window.app ? window.app.isAuthenticated() : !!getAuthToken();
-        if (!authenticated) window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login';
+        if (!authenticated) {
+            window.location.href = (window.APP_CONFIG && window.APP_CONFIG.loginUrl) || '/auth/login';
+            return false;
+        }
+        return true;
     }
 
     async function loadApplicationData() {
@@ -724,9 +730,9 @@
                     if (!skillsA.score && !expA.score && !eduA.score) return '';
                     const skillGapNote = skillsA.skill_gaps_analysis || '';
                     return `<div class="section-subtitle">Qualification Breakdown</div><div class="breakdown-grid">
-                        ${skillsA.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Skills</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(skillsA.score)}" style="width: ${toPercent(skillsA.score)}%"></div></div><div class="breakdown-score">${toPercent(skillsA.score)}%</div><div class="breakdown-desc">How well your listed skills match the required and preferred skills for this role</div></div>` : ''}
-                        ${expA.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Experience</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(expA.score)}" style="width: ${toPercent(expA.score)}%"></div></div><div class="breakdown-score">${toPercent(expA.score)}%</div><div class="breakdown-desc">Relevance and depth of your work history relative to what this role demands</div></div>` : ''}
-                        ${eduA.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Education</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(eduA.score)}" style="width: ${toPercent(eduA.score)}%"></div></div><div class="breakdown-score">${toPercent(eduA.score)}%</div><div class="breakdown-desc">Degree level, field of study, and certification alignment with stated requirements</div></div>` : ''}
+                        ${skillsA.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Skills</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(skillsA.score)}" data-pct="${toPercent(skillsA.score)}"></div></div><div class="breakdown-score">${toPercent(skillsA.score)}%</div><div class="breakdown-desc">How well your listed skills match the required and preferred skills for this role</div></div>` : ''}
+                        ${expA.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Experience</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(expA.score)}" data-pct="${toPercent(expA.score)}"></div></div><div class="breakdown-score">${toPercent(expA.score)}%</div><div class="breakdown-desc">Relevance and depth of your work history relative to what this role demands</div></div>` : ''}
+                        ${eduA.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Education</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(eduA.score)}" data-pct="${toPercent(eduA.score)}"></div></div><div class="breakdown-score">${toPercent(eduA.score)}%</div><div class="breakdown-desc">Degree level, field of study, and certification alignment with stated requirements</div></div>` : ''}
                     </div>
                     ${skillGapNote ? `<div class="skill-gap-note"><i class="fas fa-info-circle"></i> ${escapeHtml(skillGapNote)}</div>` : ''}
                     ${missingCerts.length ? `<div class="section-subtitle" style="margin-top:0.75rem">Missing Certifications</div><ul class="content-list">${missingCerts.slice(0, 4).map(c => `<li><i class="fas fa-certificate orange"></i><span>${escapeHtml(String(c))}</span></li>`).join('')}</ul>` : ''}`;
@@ -741,10 +747,10 @@
                     if (!salaryF.score && !workF.score && !sizeF.score && !locF.score) return '';
                     const salaryUnknown = (salaryF.assessment || '').toUpperCase() === 'UNKNOWN';
                     return `<div class="section-subtitle">Preference Fit</div><div class="breakdown-grid">
-                        ${salaryF.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Salary</div>${salaryUnknown ? `<div class="breakdown-na">N/A — salary not listed in posting</div>` : `<div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(salaryF.score)}" style="width: ${toPercent(salaryF.score)}%"></div></div><div class="breakdown-score">${toPercent(salaryF.score)}%</div>`}<div class="breakdown-desc">Whether the offered compensation aligns with your desired salary range</div></div>` : ''}
-                        ${workF.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Work Type</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(workF.score)}" style="width: ${toPercent(workF.score)}%"></div></div><div class="breakdown-score">${toPercent(workF.score)}%</div><div class="breakdown-desc">Remote, hybrid, or on-site arrangement vs. your stated preference</div></div>` : ''}
-                        ${sizeF.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Company Size</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(sizeF.score)}" style="width: ${toPercent(sizeF.score)}%"></div></div><div class="breakdown-score">${toPercent(sizeF.score)}%</div><div class="breakdown-desc">Startup vs. enterprise environment fit based on your preferred company scale</div></div>` : ''}
-                        ${locF.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Location</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(locF.score)}" style="width: ${toPercent(locF.score)}%"></div></div><div class="breakdown-score">${toPercent(locF.score)}%</div><div class="breakdown-desc">Geographic match — considers same city, metro-area proximity, and commute viability</div></div>` : ''}
+                        ${salaryF.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Salary</div>${salaryUnknown ? `<div class="breakdown-na">N/A — salary not listed in posting</div>` : `<div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(salaryF.score)}" data-pct="${toPercent(salaryF.score)}"></div></div><div class="breakdown-score">${toPercent(salaryF.score)}%</div>`}<div class="breakdown-desc">Whether the offered compensation aligns with your desired salary range</div></div>` : ''}
+                        ${workF.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Work Type</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(workF.score)}" data-pct="${toPercent(workF.score)}"></div></div><div class="breakdown-score">${toPercent(workF.score)}%</div><div class="breakdown-desc">Remote, hybrid, or on-site arrangement vs. your stated preference</div></div>` : ''}
+                        ${sizeF.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Company Size</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(sizeF.score)}" data-pct="${toPercent(sizeF.score)}"></div></div><div class="breakdown-score">${toPercent(sizeF.score)}%</div><div class="breakdown-desc">Startup vs. enterprise environment fit based on your preferred company scale</div></div>` : ''}
+                        ${locF.score !== undefined ? `<div class="breakdown-item"><div class="breakdown-label">Location</div><div class="breakdown-bar-container"><div class="breakdown-bar-fill ${getBarClass(locF.score)}" data-pct="${toPercent(locF.score)}"></div></div><div class="breakdown-score">${toPercent(locF.score)}%</div><div class="breakdown-desc">Geographic match — considers same city, metro-area proximity, and commute viability</div></div>` : ''}
                     </div>`;
                 })()}
 
@@ -757,7 +763,7 @@
                             <span class="percentile-number">${percentile}<sup>th</sup></span>
                             <span class="percentile-label">percentile vs. typical applicants</span>
                         </div>
-                        <div class="percentile-track"><div class="percentile-fill" style="width: ${Math.min(percentile, 100)}%"></div><div class="percentile-marker" data-pct="${Math.min(percentile, 100)}"></div></div>
+                        <div class="percentile-track"><div class="percentile-fill" data-pct="${Math.min(percentile, 100)}"></div><div class="percentile-marker" data-pct="${Math.min(percentile, 100)}"></div></div>
                         <div class="percentile-scale"><span>0</span><span>50</span><span>100</span></div>
                     </div>` : ''}
                     ${uvp ? `<div class="uvp-box"><div class="uvp-label"><i class="fas fa-fingerprint"></i> Your Unique Value</div><div class="uvp-text">${escapeHtml(uvp)}</div></div>` : ''}
@@ -785,6 +791,11 @@
         const fcEl = document.getElementById('fitContent');
         if (fcEl) {
             fcEl.innerHTML = fitHtml;
+            fcEl.querySelectorAll('.breakdown-bar-fill[data-pct], .percentile-fill[data-pct]').forEach((el) => {
+                const h = /** @type {HTMLElement} */ (el);
+                const p = h.dataset['pct'];
+                if (p !== undefined) h.style.width = p + '%';
+            });
             const marker = /** @type {HTMLElement|null} */ (fcEl.querySelector('.percentile-marker[data-pct]'));
             if (marker) marker.style.left = marker.dataset['pct'] + '%';
         }
